@@ -1,0 +1,42 @@
+from contextlib import asynccontextmanager
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+import practice
+import tools
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup: Print registered routes
+    print("\n=== Registered routes ===")
+    for route in app.routes:
+        if hasattr(route, "methods"):
+            methods = ", ".join(sorted(route.methods))
+            print(f"  {methods:<20} {route.path}")
+    print("=========================\n")
+    yield
+    # Shutdown logic can go here if needed
+
+
+app = FastAPI(title="KnowledgeCode Tools API", lifespan=lifespan)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Include Practice Router
+app.include_router(practice.router, prefix="/practice")
+# Include Tools Router
+app.include_router(tools.router)
+
+
+@app.get("/")
+async def root():
+    return {"status": "ok"}
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
