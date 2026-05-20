@@ -2,6 +2,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 import practice
+import notifications
 import tools
 import resume
 
@@ -32,6 +33,8 @@ app.add_middleware(
 app.include_router(practice.router, prefix="/practice")
 # Include Tools Router
 app.include_router(tools.router)
+# Include Notifications Router
+app.include_router(notifications.router)
 # Include Resume Router
 app.include_router(resume.router)
 

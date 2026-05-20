@@ -6,11 +6,12 @@ No external API calls or Ollama required.
 
 import json
 import re
+import hashlib
 from io import BytesIO
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from fastapi.responses import JSONResponse
 from sentence_transformers import SentenceTransformer, util
-from tools import get_pipe, MODEL_CACHE
+from tools import get_pipe, MODEL_CACHE, redis_client
 import numpy as np
 
 # PDF extraction
@@ -87,6 +88,13 @@ async def analyze_resume(
     file_bytes = await resume.read()
     resume_text = extract_text_from_file(file_bytes, resume.filename or "resume.txt")
 
+    # Check Cache
+    if redis_client:
+        cache_key = f"ats:{hashlib.md5((resume_text + job_description).encode()).hexdigest()}"
+        cached = redis_client.get(cache_key)
+        if cached:
+            return JSONResponse(content={"status": "ok", "data": json.loads(cached), "cached": True})
+
     if len(resume_text.strip()) < 50:
         raise HTTPException(
             status_code=422,
@@ -152,7 +160,11 @@ async def analyze_resume(
     if semantic_score > 0:
         result["section_scores"]["semantic_relevance"] = semantic_score
 
-    return JSONResponse(content={"status": "ok", "data": result})
+    # Store in Cache
+    if redis_client:
+        redis_client.setex(cache_key, 86400, json.dumps(result))
+
+    return JSONResponse(content={"status": "ok", "data": result, "cached": False})
 
 @router.post("/summarize")
 async def summarize_resume(
@@ -163,6 +175,13 @@ async def summarize_resume(
     """
     file_bytes = await resume.read()
     resume_text = extract_text_from_file(file_bytes, resume.filename or "resume.txt")
+
+    # Check Cache
+    if redis_client:
+        cache_key = f"res_sum:{hashlib.md5(resume_text.encode()).hexdigest()}"
+        cached = redis_client.get(cache_key)
+        if cached:
+            return JSONResponse(content={"status": "ok", "data": json.loads(cached), "cached": True})
 
     if len(resume_text.strip()) < 50:
         raise HTTPException(
@@ -196,7 +215,11 @@ async def summarize_resume(
         "summary_paragraph": local_summary
     }
 
-    return JSONResponse(content={"status": "ok", "data": result})
+    # Store in Cache
+    if redis_client:
+        redis_client.setex(cache_key, 86400, json.dumps(result))
+
+    return JSONResponse(content={"status": "ok", "data": result, "cached": False})
 
 @router.get("/health")
 async def health_check():

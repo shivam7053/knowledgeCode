@@ -4,6 +4,7 @@ from typing import List, Optional, Dict, Any
 from database import problems_collection, categories_collection
 from bson import ObjectId
 import subprocess
+import asyncio
 import tempfile
 import os
 import time
@@ -109,11 +110,15 @@ LANGUAGE_CONFIG: Dict[str, Any] = {
 async def execute_code(language: str, code: str, stdin_input: str = "") -> Dict[str, Any]:
     """Execute code in a subprocess and return stdout / stderr / time."""
     if language == "sql":
-        return _execute_sql(code)
+        return await asyncio.to_thread(_execute_sql, code)
 
     config = LANGUAGE_CONFIG.get(language)
     if not config:
         return {"stdout": "", "stderr": f"Language '{language}' not supported.", "time": "0ms"}
+
+    # Preliminary check: Ensure Docker is actually reachable
+    if not os.path.exists("/var/run/docker.sock") and os.name != 'nt':
+        return {"stdout": "", "stderr": "System Error: Docker socket unavailable.", "time": "0ms"}
 
     start = time.time()
     sandbox_base = "/sandbox" if os.path.exists("/sandbox") else None
@@ -138,29 +143,41 @@ async def execute_code(language: str, code: str, stdin_input: str = "") -> Dict[
             if sandbox_vol and sandbox_base:
                 docker_cmd += ["-v", f"{sandbox_vol}:/sandbox", "-w", tmpdir]
             else:
-                docker_cmd += ["-v", f"{tmpdir}:/app"]
+                docker_cmd += ["-v", f"{tmpdir}:/app", "-w", "/app"]
 
             docker_cmd += [
                 config["image"],     # The image to use for execution
                 *config["cmd"]       # The command to run inside the container
             ]
 
-            # Execute the Docker command
-            # Pass stdin_input to the container's stdin
-            proc = subprocess.run(
-                docker_cmd,
-                input=stdin_input,
-                capture_output=True, text=True, timeout=TIMEOUT_SECONDS,
+            # Execute the Docker command asynchronously
+            proc = await asyncio.create_subprocess_exec(
+                *docker_cmd,
+                stdin=asyncio.subprocess.PIPE,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
             )
-            elapsed = f"{round((time.time() - start) * 1000, 2)}ms"
-            return {"stdout": proc.stdout, "stderr": proc.stderr, "time": elapsed}
 
-    except subprocess.TimeoutExpired:
-        return {"stdout": "", "stderr": f"Time Limit Exceeded (>{TIMEOUT_SECONDS}s)", "time": f"{TIMEOUT_SECONDS * 1000}ms"}
+            try:
+                stdout_bytes, stderr_bytes = await asyncio.wait_for(
+                    proc.communicate(input=stdin_input.encode() if stdin_input else None),
+                    timeout=TIMEOUT_SECONDS
+                )
+                stdout = stdout_bytes.decode(errors='replace')
+                stderr = stderr_bytes.decode(errors='replace')
+            except asyncio.TimeoutError:
+                try:
+                    proc.kill()
+                    await proc.wait()
+                except:
+                    pass
+                return {"stdout": "", "stderr": f"Time Limit Exceeded (>{TIMEOUT_SECONDS}s)", "time": f"{TIMEOUT_SECONDS * 1000}ms"}
+
+            elapsed = f"{round((time.time() - start) * 1000, 2)}ms"
+            return {"stdout": stdout, "stderr": stderr, "time": elapsed}
+
     except FileNotFoundError:
         return {"stdout": "", "stderr": "Docker client not found. Is Docker installed and running?", "time": "0ms"}
-    except subprocess.CalledProcessError as e:
-        return {"stdout": "", "stderr": f"Docker execution error: {e.stderr}", "time": "0ms"}
     except Exception as exc:
         return {"stdout": "", "stderr": str(exc), "time": "0ms"}
 

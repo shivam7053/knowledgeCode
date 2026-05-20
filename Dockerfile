@@ -24,6 +24,7 @@ RUN pip install --no-cache-dir torch --index-url https://download.pytorch.org/wh
     huggingface_hub \
     hf_transfer \
     sentence-transformers \
+    redis \
     -r requirements.txt
 
 # Pre-download ML models to the cache directory

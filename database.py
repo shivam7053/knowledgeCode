@@ -27,22 +27,24 @@ else:
 
 MONGODB_URI = os.getenv("MONGODB_URI")
 if not MONGODB_URI:
-    print("CRITICAL ERROR: MONGODB_URI not found. Defaulting to localhost.")
+    print("WARNING: MONGODB_URI not found. Defaulting to localhost.")
     MONGODB_URI = "mongodb://localhost:27017"
 else:
     # Masking password for security in logs
-    safe_uri = MONGODB_URI.split('@')[-1] if '@' in MONGODB_URI else MONGODB_URI
-    print(f"SUCCESS: MONGODB_URI loaded. Connecting to: ...@{safe_uri}")
+    try:
+        safe_uri = MONGODB_URI.split('@')[-1] if '@' in MONGODB_URI else MONGODB_URI
+        print(f"SUCCESS: MONGODB_URI loaded. Connecting to: {safe_uri}")
+    except Exception:
+        print("SUCCESS: MONGODB_URI loaded.")
 
 MONGODB_DB_NAME = os.getenv("MONGODB_DB_NAME", "knowledgecode_db")
 
-try:
-    client = AsyncIOMotorClient(MONGODB_URI, serverSelectionTimeoutMS=10000)
-except Exception as e:
-    print(f"FAILED to initialize MongoDB client: {e}")
+# Use a 5-second timeout for server selection to prevent the API from hanging
+client = AsyncIOMotorClient(MONGODB_URI, serverSelectionTimeoutMS=5000)
 
 # We use the "test" or "KnowledgeCode" database
 db = client.get_database(MONGODB_DB_NAME)
 
 problems_collection = db.practice_problems
 categories_collection = db.categories
+notifications_collection = db.notifications

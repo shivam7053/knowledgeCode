@@ -3,12 +3,14 @@ import subprocess
 import shutil
 import tempfile
 import threading
+import hashlib
 from pathlib import Path
 from fastapi import APIRouter, Form, HTTPException, UploadFile, File, BackgroundTasks
 from fastapi.responses import FileResponse
 from transformers import pipeline
 import pandas as pd
 import pdfplumber
+import redis
 
 router = APIRouter(tags=["Tools"])
 
@@ -62,6 +64,14 @@ def handle_exception(td: tempfile.TemporaryDirectory, e: Exception):
 MODEL_CACHE = "/app/model_cache"
 os.makedirs(MODEL_CACHE, exist_ok=True)
 
+# Redis Setup
+REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
+try:
+    redis_client = redis.from_url(REDIS_URL, decode_responses=True)
+except Exception as e:
+    print(f"Redis not available: {e}")
+    redis_client = None
+
 # Global dictionary to store loaded models in memory
 _pipelines = {}
 _load_lock = threading.Lock()
@@ -89,16 +99,42 @@ def get_pipe(cache_key: str, pipeline_task_name: str, model_name: str, model_kwa
 @router.post("/ai/summarize")
 def ai_summarize(text: str = Form(...)):
     """Note: Changed to 'def' to run in threadpool and avoid blocking event loop."""
+    # 1. Check Redis Cache
+    if redis_client:
+        cache_key = f"sum:{hashlib.md5(text.encode()).hexdigest()}"
+        cached = redis_client.get(cache_key)
+        if cached:
+            return {"result": cached, "cached": True}
+
     pipe = get_pipe("summarization_bart", "summarization", "sshleifer/distilbart-cnn-6-6")
     res = pipe(text, max_length=150, min_length=40, do_sample=False)
-    return {"result": res[0]['summary_text']}
+    summary = res[0]['summary_text']
+
+    # 2. Store in Cache (Expires in 24 hours)
+    if redis_client:
+        redis_client.setex(cache_key, 86400, summary)
+
+    return {"result": summary, "cached": False}
 
 @router.post("/ai/qa")
 def ai_qa(question: str = Form(...), context: str = Form(...)):
     """Note: Changed to 'def' to run in threadpool."""
+    # 1. Check Redis Cache
+    if redis_client:
+        cache_key = f"qa:{hashlib.md5((question + context).encode()).hexdigest()}"
+        cached = redis_client.get(cache_key)
+        if cached:
+            return {"result": cached, "cached": True}
+
     pipe = get_pipe("qa_distilbert", "question-answering", "distilbert-base-uncased-distilled-squad")
     res = pipe(question=question, context=context)
-    return {"result": res['answer']}
+    answer = res['answer']
+
+    # 2. Store in Cache
+    if redis_client:
+        redis_client.setex(cache_key, 86400, answer)
+
+    return {"result": answer, "cached": False}
 
 # ─── PDF / Office Tools ───────────────────────────────────────────────────────
 
