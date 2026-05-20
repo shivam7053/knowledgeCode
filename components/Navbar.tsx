@@ -1,10 +1,10 @@
 "use client";
-import { AppBar, Toolbar, Typography, Button, Container, Box, Link as MuiLink, Switch, FormControlLabel, Stack } from "@mui/material";
+import { AppBar, Toolbar, Typography, Container, Box, Link as MuiLink, Switch, FormControlLabel, Stack, IconButton, Badge } from "@mui/material";
 import Link from "next/link";
 import { ThemeSwitcher } from "./ThemeSwitcher";
 import { useState, useEffect } from "react";
 import { useTheme } from "@mui/material/styles";
-import { School as LearningIcon, SportsEsports as ChilloutIcon } from "@mui/icons-material";
+import { School as LearningIcon, SportsEsports as ChilloutIcon, Notifications as NotificationsIcon } from "@mui/icons-material";
 import { useRouter } from "next/navigation";
 import { useChillMode } from "@/app/providers";
 
@@ -80,15 +80,19 @@ export default function AppNavbar() {
 
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexGrow: 0 }}>
             <ThemeSwitcher />
-            <Button
-              component={Link} 
-              href="#" 
-              variant={isChillMode ? "contained" : "outlined"} 
-              color={isChillMode ? "inherit" : "primary"}
-              sx={isChillMode ? { bgcolor: 'white', color: isDarkMode ? 'black' : muiTheme.palette.error.main, '&:hover': { bgcolor: '#f5f5f5' } } : {}}
+            <IconButton 
+              component={Link}
+              href="/notifications"
+              color="inherit"
+              sx={{ 
+                transition: 'transform 0.2s',
+                '&:hover': { transform: 'scale(1.1)' }
+              }}
             >
-              Login
-            </Button>
+              <Badge badgeContent={2} color="error">
+                <NotificationsIcon />
+              </Badge>
+            </IconButton>
           </Box>
         </Toolbar>
       </Container>
