@@ -6,3 +6,8 @@ pandas
 openpyxl
 motor
 python-dotenv
+pdfminer.six
+python-docx
+# transformers
+# torch
+# sentencepiece

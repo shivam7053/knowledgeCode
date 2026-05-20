@@ -3,6 +3,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 import practice
 import tools
+import resume
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -31,6 +32,8 @@ app.add_middleware(
 app.include_router(practice.router, prefix="/practice")
 # Include Tools Router
 app.include_router(tools.router)
+# Include Resume Router
+app.include_router(resume.router)
 
 
 @app.get("/")

@@ -65,29 +65,42 @@ class ValidateRequest(BaseModel):
     test_cases: List[TestCase]
 
 
+class CompilerRequest(BaseModel):
+    language: str
+    code: str
+    stdin: str = ""
+
+
 # ─── Execution Engine ──────────────────────────────────────────────────────────
 
 TIMEOUT_SECONDS = 5
 
-# Determine shell prefix based on OS for multi-command executions
-shell_prefix = ["cmd", "/c"] if os.name == "nt" else ["sh", "-c"]
+# Define Docker image names for execution environments
+PYTHON_EXEC_IMAGE = "knowledgecode-python-exec"
+NODE_EXEC_IMAGE = "knowledgecode-node-exec"
+JAVA_EXEC_IMAGE = "knowledgecode-java-exec"
+CPP_EXEC_IMAGE = "knowledgecode-cpp-exec"
 
 LANGUAGE_CONFIG: Dict[str, Any] = {
     "python": {
         "filename": "solution.py",
-        "run": lambda src, _d: [os.sys.executable, src],
+        "image": PYTHON_EXEC_IMAGE,
+        "cmd": ["python", "solution.py"],
     },
     "javascript": {
         "filename": "solution.js",
-        "run": lambda src, _d: ["node", src],
+        "image": NODE_EXEC_IMAGE,
+        "cmd": ["node", "solution.js"],
     },
     "java": {
         "filename": "Main.java",
-        "run": lambda src, d: shell_prefix + [f"javac {src} -d {d} && java -cp {d} Main"],
+        "image": JAVA_EXEC_IMAGE,
+        "cmd": ["sh", "-c", "javac Main.java && java Main"], # Compile and run in one command
     },
     "cpp": {
         "filename": "solution.cpp",
-        "run": lambda src, d: shell_prefix + [f"g++ -o {d}/sol {src} && {os.path.join(d, 'sol')}"],
+        "image": CPP_EXEC_IMAGE,
+        "cmd": ["sh", "-c", "g++ -o solution solution.cpp && ./solution"], # Compile and run in one command
     },
     "sql": None,   # handled separately via SQLite
 }
@@ -103,25 +116,51 @@ async def execute_code(language: str, code: str, stdin_input: str = "") -> Dict[
         return {"stdout": "", "stderr": f"Language '{language}' not supported.", "time": "0ms"}
 
     start = time.time()
+    sandbox_base = "/sandbox" if os.path.exists("/sandbox") else None
     try:
-        with tempfile.TemporaryDirectory() as tmpdir:
-            src = os.path.join(tmpdir, config["filename"])
-            with open(src, "w") as f:
+        with tempfile.TemporaryDirectory(dir=sandbox_base) as tmpdir:
+            # Write the user's code to a file in the temporary directory
+            code_file_path = os.path.join(tmpdir, config["filename"])
+            with open(code_file_path, "w") as f:
                 f.write(code)
 
-            cmd = config["run"](src, tmpdir)
+            # Construct the Docker command
+            docker_cmd = [
+                "docker", "run",
+                "-i",        # Keep STDIN open even if not attached
+                "--rm",  # Automatically remove the container when it exits
+                "--network", "none", # Disable network access for security
+                "--memory", "128m",  # Limit memory to 128MB
+                "--cpus", "0.5",     # Limit CPU to 0.5 cores
+            ]
+
+            sandbox_vol = os.getenv("SANDBOX_VOLUME_NAME")
+            if sandbox_vol and sandbox_base:
+                docker_cmd += ["-v", f"{sandbox_vol}:/sandbox", "-w", tmpdir]
+            else:
+                docker_cmd += ["-v", f"{tmpdir}:/app"]
+
+            docker_cmd += [
+                config["image"],     # The image to use for execution
+                *config["cmd"]       # The command to run inside the container
+            ]
+
+            # Execute the Docker command
+            # Pass stdin_input to the container's stdin
             proc = subprocess.run(
-                cmd, input=stdin_input,
+                docker_cmd,
+                input=stdin_input,
                 capture_output=True, text=True, timeout=TIMEOUT_SECONDS,
             )
             elapsed = f"{round((time.time() - start) * 1000, 2)}ms"
             return {"stdout": proc.stdout, "stderr": proc.stderr, "time": elapsed}
 
     except subprocess.TimeoutExpired:
-        return {"stdout": "", "stderr": f"Time Limit Exceeded (>{TIMEOUT_SECONDS}s)",
-                "time": f"{TIMEOUT_SECONDS * 1000}ms"}
-    except FileNotFoundError as exc:
-        return {"stdout": "", "stderr": f"Runtime not found: {exc}", "time": "0ms"}
+        return {"stdout": "", "stderr": f"Time Limit Exceeded (>{TIMEOUT_SECONDS}s)", "time": f"{TIMEOUT_SECONDS * 1000}ms"}
+    except FileNotFoundError:
+        return {"stdout": "", "stderr": "Docker client not found. Is Docker installed and running?", "time": "0ms"}
+    except subprocess.CalledProcessError as e:
+        return {"stdout": "", "stderr": f"Docker execution error: {e.stderr}", "time": "0ms"}
     except Exception as exc:
         return {"stdout": "", "stderr": str(exc), "time": "0ms"}
 
@@ -470,3 +509,14 @@ async def _evaluate(submission: Submission) -> Dict[str, Any]:
         "test_results": exec_result.get("test_results", []),
         "run_only":     submission.run_only,
     }
+
+
+@router.post("/run-compiler")
+async def run_compiler(req: CompilerRequest):
+    """Generic endpoint for the online compiler."""
+    result = await execute_code(
+        language=req.language,
+        code=req.code,
+        stdin_input=req.stdin
+    )
+    return result

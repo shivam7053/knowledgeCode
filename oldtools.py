@@ -2,17 +2,13 @@ import os
 import subprocess
 import shutil
 import tempfile
-import threading
 from pathlib import Path
-from fastapi import APIRouter, Form, HTTPException, UploadFile, File, BackgroundTasks
+from fastapi import APIRouter, UploadFile, File, Form, HTTPException, BackgroundTasks
 from fastapi.responses import FileResponse
-from transformers import pipeline
 import pandas as pd
 import pdfplumber
 
-router = APIRouter(tags=["Tools"])
-
-# ─── Ghostscript Helpers ──────────────────────────────────────────────────────
+router = APIRouter(tags=["tools"])
 
 def get_gs_executable():
     """Determine the Ghostscript executable name based on the platform."""
@@ -39,8 +35,6 @@ def run_gs_command(args: list):
         print(f"Ghostscript Error: {e.stderr}")
         raise HTTPException(status_code=500, detail=f"Engine error: {e.stderr}")
 
-# ─── Utility Functions ────────────────────────────────────────────────────────
-
 async def save_upload_file(upload_file: UploadFile, destination: Path):
     try:
         with destination.open("wb") as buffer:
@@ -58,50 +52,6 @@ def handle_exception(td: tempfile.TemporaryDirectory, e: Exception):
         raise e
     raise HTTPException(status_code=500, detail=str(e))
 
-# Local directory to store models within the container
-MODEL_CACHE = "/app/model_cache"
-os.makedirs(MODEL_CACHE, exist_ok=True)
-
-# Global dictionary to store loaded models in memory
-_pipelines = {}
-_load_lock = threading.Lock()
-
-def get_pipe(cache_key: str, pipeline_task_name: str, model_name: str, model_kwargs: dict = None):
-    """Lazy-loads and caches models from the local filesystem."""
-    if cache_key not in _pipelines:
-        with _load_lock:
-            if cache_key not in _pipelines:
-                try:
-                    kwargs = {"cache_dir": MODEL_CACHE}
-                    if model_kwargs:
-                        kwargs.update(model_kwargs)
-                    _pipelines[cache_key] = pipeline(
-                        pipeline_task_name,
-                        model=model_name, 
-                        model_kwargs=kwargs
-                    )
-                except Exception as e:
-                    raise HTTPException(status_code=500, detail=f"Model error: {str(e)}")
-    return _pipelines[cache_key]
-
-# ─── AI Tools ─────────────────────────────────────────────────────────────────
-
-@router.post("/ai/summarize")
-def ai_summarize(text: str = Form(...)):
-    """Note: Changed to 'def' to run in threadpool and avoid blocking event loop."""
-    pipe = get_pipe("summarization_bart", "summarization", "sshleifer/distilbart-cnn-6-6")
-    res = pipe(text, max_length=150, min_length=40, do_sample=False)
-    return {"result": res[0]['summary_text']}
-
-@router.post("/ai/qa")
-def ai_qa(question: str = Form(...), context: str = Form(...)):
-    """Note: Changed to 'def' to run in threadpool."""
-    pipe = get_pipe("qa_distilbert", "question-answering", "distilbert-base-uncased-distilled-squad")
-    res = pipe(question=question, context=context)
-    return {"result": res['answer']}
-
-# ─── PDF / Office Tools ───────────────────────────────────────────────────────
-
 @router.post("/compress-pdf")
 async def compress_pdf(
     file: UploadFile = File(...),
@@ -112,12 +62,31 @@ async def compress_pdf(
     try:
         input_path = tmp_path / "input.pdf"
         output_path = tmp_path / "compressed.pdf"
+
         await save_upload_file(file, input_path)
-        settings = {"high": "/screen", "medium": "/ebook", "low": "/printer"}
+
+        # Map levels to GS PDFSETTINGS
+        settings = {
+            "high": "/screen",   # 72 dpi
+            "medium": "/ebook",  # 150 dpi
+            "low": "/printer"    # 300 dpi
+        }
         gs_setting = settings.get(compressionLevel, "/ebook")
-        run_gs_command(["-sDEVICE=pdfwrite", "-dCompatibilityLevel=1.4", f"-dPDFSETTINGS={gs_setting}", f"-sOutputFile={output_path}", str(input_path)])
+
+        run_gs_command([
+            "-sDEVICE=pdfwrite",
+            "-dCompatibilityLevel=1.4",
+            f"-dPDFSETTINGS={gs_setting}",
+            f"-sOutputFile={output_path}",
+            str(input_path)
+        ])
+
         background_tasks.add_task(td.cleanup)
-        return FileResponse(output_path, filename=f"compressed-{file.filename}", media_type="application/pdf")
+        return FileResponse(
+            output_path, 
+            filename=f"compressed-{file.filename}",
+            media_type="application/pdf"
+        )
     except Exception as e:
         handle_exception(td, e)
 
@@ -127,12 +96,24 @@ async def pdf_to_word(file: UploadFile = File(...), background_tasks: Background
     try:
         input_path = tmp_path / "input.pdf"
         output_path = tmp_path / "converted.docx"
+
         await save_upload_file(file, input_path)
-        run_gs_command(["-sDEVICE=docxwrite", f"-sOutputFile={output_path}", str(input_path)])
+
+        run_gs_command([
+            "-sDEVICE=docxwrite",
+            f"-sOutputFile={output_path}",
+            str(input_path)
+        ])
+
         if not output_path.exists() or output_path.stat().st_size == 0:
             raise HTTPException(status_code=500, detail="Conversion resulted in an empty file")
+
         background_tasks.add_task(td.cleanup)
-        return FileResponse(output_path, filename=file.filename.replace(".pdf", ".docx"), media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document")
+        return FileResponse(
+            output_path,
+            filename=file.filename.replace(".pdf", ".docx"),
+            media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        )
     except Exception as e:
         handle_exception(td, e)
 
@@ -142,12 +123,27 @@ async def pdf_to_image(file: UploadFile = File(...), background_tasks: Backgroun
     try:
         input_path = tmp_path / "input.pdf"
         output_path = tmp_path / "page.png"
+
         await save_upload_file(file, input_path)
-        run_gs_command(["-sDEVICE=png16m", "-r300", "-dFirstPage=1", "-dLastPage=1", f"-sOutputFile={output_path}", str(input_path)])
+
+        run_gs_command([
+            "-sDEVICE=png16m",
+            "-r300",
+            "-dFirstPage=1",
+            "-dLastPage=1",
+            f"-sOutputFile={output_path}",
+            str(input_path)
+        ])
+
         if not output_path.exists() or output_path.stat().st_size == 0:
             raise HTTPException(status_code=500, detail="Image generation failed")
+
         background_tasks.add_task(td.cleanup)
-        return FileResponse(output_path, filename=file.filename.replace(".pdf", ".png"), media_type="image/png")
+        return FileResponse(
+            output_path,
+            filename=file.filename.replace(".pdf", ".png"),
+            media_type="image/png"
+        )
     except Exception as e:
         handle_exception(td, e)
 
@@ -157,7 +153,9 @@ async def pdf_to_excel(file: UploadFile = File(...), background_tasks: Backgroun
     try:
         input_path = tmp_path / "input.pdf"
         output_path = tmp_path / "extracted.xlsx"
+
         await save_upload_file(file, input_path)
+
         all_tables = []
         with pdfplumber.open(input_path) as pdf:
             for page in pdf.pages:
@@ -166,39 +164,81 @@ async def pdf_to_excel(file: UploadFile = File(...), background_tasks: Backgroun
                     if len(table) > 1:
                         df = pd.DataFrame(table[1:], columns=table[0])
                         all_tables.append(df)
+
         if not all_tables:
             raise HTTPException(status_code=400, detail="No structured tables found in the PDF.")
+
         with pd.ExcelWriter(output_path, engine='openpyxl') as writer:
             full_df = pd.concat(all_tables, ignore_index=True)
             full_df.to_excel(writer, index=False, sheet_name='Extracted Data')
+
         background_tasks.add_task(td.cleanup)
-        return FileResponse(output_path, filename=file.filename.replace(".pdf", ".xlsx"), media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+        return FileResponse(
+            output_path,
+            filename=file.filename.replace(".pdf", ".xlsx"),
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
     except Exception as e:
         handle_exception(td, e)
 
 @router.post("/protect-pdf")
-async def protect_pdf(file: UploadFile = File(...), password: str = Form(...), background_tasks: BackgroundTasks = BackgroundTasks()):
+async def protect_pdf(
+    file: UploadFile = File(...),
+    password: str = Form(...),
+    background_tasks: BackgroundTasks = BackgroundTasks()
+):
     td, tmp_path = create_temp_dir()
     try:
         input_path = tmp_path / "input.pdf"
         output_path = tmp_path / "protected.pdf"
+        
         await save_upload_file(file, input_path)
-        run_gs_command(["-sDEVICE=pdfwrite", "-dEncryptionR=3", f"-sUserPassword={password}", f"-sOwnerPassword={password}", "-dPDFSETTINGS=/prepress", f"-sOutputFile={output_path}", str(input_path)])
+
+        run_gs_command([
+            "-sDEVICE=pdfwrite",
+            "-dEncryptionR=3",
+            f"-sUserPassword={password}",
+            f"-sOwnerPassword={password}",
+            "-dPDFSETTINGS=/prepress",
+            f"-sOutputFile={output_path}",
+            str(input_path)
+        ])
+
         background_tasks.add_task(td.cleanup)
-        return FileResponse(output_path, filename=f"protected-{file.filename}", media_type="application/pdf")
+        return FileResponse(
+            output_path,
+            filename=f"protected-{file.filename}",
+            media_type="application/pdf"
+        )
     except Exception as e:
         handle_exception(td, e)
 
 @router.post("/unlock-pdf")
-async def unlock_pdf(file: UploadFile = File(...), password: str = Form(...), background_tasks: BackgroundTasks = BackgroundTasks()):
+async def unlock_pdf(
+    file: UploadFile = File(...),
+    password: str = Form(...),
+    background_tasks: BackgroundTasks = BackgroundTasks()
+):
     td, tmp_path = create_temp_dir()
     try:
         input_path = tmp_path / "input.pdf"
         output_path = tmp_path / "unlocked.pdf"
+        
         await save_upload_file(file, input_path)
-        run_gs_command(["-sDEVICE=pdfwrite", f"-sPDFPassword={password}", f"-sOutputFile={output_path}", str(input_path)])
+
+        run_gs_command([
+            "-sDEVICE=pdfwrite",
+            f"-sPDFPassword={password}",
+            f"-sOutputFile={output_path}",
+            str(input_path)
+        ])
+
         background_tasks.add_task(td.cleanup)
-        return FileResponse(output_path, filename=f"unlocked-{file.filename}", media_type="application/pdf")
+        return FileResponse(
+            output_path,
+            filename=f"unlocked-{file.filename}",
+            media_type="application/pdf"
+        )
     except Exception as e:
         handle_exception(td, e)
 
@@ -208,9 +248,20 @@ async def extract_text(file: UploadFile = File(...), background_tasks: Backgroun
     try:
         input_path = tmp_path / "input.pdf"
         output_path = tmp_path / "extracted.txt"
+
         await save_upload_file(file, input_path)
-        run_gs_command(["-sDEVICE=txtwrite", f"-sOutputFile={output_path}", str(input_path)])
+
+        run_gs_command([
+            "-sDEVICE=txtwrite",
+            f"-sOutputFile={output_path}",
+            str(input_path)
+        ])
+
         background_tasks.add_task(td.cleanup)
-        return FileResponse(output_path, filename=file.filename.replace(".pdf", ".txt"), media_type="text/plain")
+        return FileResponse(
+            output_path,
+            filename=file.filename.replace(".pdf", ".txt"),
+            media_type="text/plain"
+        )
     except Exception as e:
         handle_exception(td, e)
