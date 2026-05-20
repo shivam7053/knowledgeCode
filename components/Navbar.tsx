@@ -89,7 +89,7 @@ export default function AppNavbar() {
                 '&:hover': { transform: 'scale(1.1)' }
               }}
             >
-              <Badge badgeContent={2} color="error">
+              <Badge badgeContent={notifCount} color="error">
                 <NotificationsIcon />
               </Badge>
             </IconButton>

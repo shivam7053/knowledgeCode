@@ -1,18 +1,41 @@
 "use client";
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { Container, Typography, Box, Paper, Stack, alpha, useTheme, Divider, IconButton } from "@mui/material";
 import { Notifications as NotificationsIcon, Info as InfoIcon, Warning as WarningIcon, Delete as DeleteIcon } from "@mui/icons-material";
 import { useChillMode } from "@/app/providers";
 
-const MOCK_NOTIFICATIONS = [
-  { id: 1, title: "New AI Model Available", message: "We've updated DocForge with the latest DistilBART weights for faster summarization.", type: "info", date: "2 hours ago" },
-  { id: 2, title: "System Maintenance", message: "Occasional downtime may occur tonight at 2 AM EST for local server optimizations.", type: "warning", date: "1 day ago" },
-];
+interface Notification {
+  _id: string;
+  title: string;
+  message: string;
+  category: string;
+  timestamp: string;
+}
 
 export default function NotificationsPage() {
   const theme = useTheme();
   const { isChillMode } = useChillMode();
   const primary = isChillMode ? theme.palette.error.main : theme.palette.primary.main;
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+
+  const PYTHON_API_BASE = "http://localhost:8000";
+
+  useEffect(() => {
+    fetch(`${PYTHON_API_BASE}/notifications`)
+      .then(res => res.json())
+      .then(data => setNotifications(data))
+      .catch(err => console.error("Error fetching notifications:", err));
+  }, []);
+
+  const getRelativeTime = (isoString: string) => {
+    const date = new Date(isoString);
+    const now = new Date();
+    const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000);
+    if (diffInSeconds < 60) return "Just now";
+    if (diffInSeconds < 3600) return `${Math.floor(diffInSeconds / 60)}m ago`;
+    if (diffInSeconds < 86400) return `${Math.floor(diffInSeconds / 3600)}h ago`;
+    return date.toLocaleDateString();
+  };
 
   return (
     <Box sx={{ minHeight: "100vh", py: 8, bgcolor: "background.default" }}>
@@ -28,28 +51,28 @@ export default function NotificationsPage() {
         </Stack>
 
         <Stack spacing={2}>
-          {MOCK_NOTIFICATIONS.length > 0 ? (
-            MOCK_NOTIFICATIONS.map((notif) => (
+          {notifications.length > 0 ? (
+            notifications.map((notif) => (
               <Paper
-                key={notif.id}
+                key={notif._id}
                 variant="outlined"
                 sx={{
                   p: 3,
                   borderRadius: 3,
                   transition: "all 0.2s",
-                  "&:hover": { borderColor: primary, bgcolor: alpha(primary, 0.02) }
+                  "&:hover": { borderColor: primary, bgcolor: alpha(primary, 0.01) }
                 }}
               >
                 <Stack direction="row" spacing={2} alignItems="flex-start">
-                  <Box sx={{ mt: 0.5, color: notif.type === "warning" ? "warning.main" : primary }}>
-                    {notif.type === "warning" ? <WarningIcon /> : <InfoIcon />}
+                  <Box sx={{ mt: 0.5, color: notif.category === "game" ? "warning.main" : primary }}>
+                    {notif.category === "game" ? <WarningIcon /> : <InfoIcon />}
                   </Box>
                   <Box sx={{ flexGrow: 1 }}>
                     <Typography variant="subtitle1" fontWeight={700}>{notif.title}</Typography>
                     <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
                       {notif.message}
                     </Typography>
-                    <Typography variant="caption" color="text.disabled">{notif.date}</Typography>
+                    <Typography variant="caption" color="text.disabled">{getRelativeTime(notif.timestamp)}</Typography>
                   </Box>
                   <IconButton size="small" color="inherit" sx={{ opacity: 0.5 }}>
                     <DeleteIcon fontSize="small" />
