@@ -8,26 +8,31 @@ export async function createPost(prevState: any, formData: FormData) {
   await connectDB();
   
   const rawData = {
-    title: formData.get('title'),
-    slug: formData.get('slug'),
-    category: formData.get('category'),
-    image: formData.get('image'),
-    content: formData.get('content'),
-    excerpt: formData.get('excerpt'),
+    title: formData.get('title')?.toString(),
+    slug: formData.get('slug')?.toString(),
+    category: formData.get('category')?.toString(),
+    image: formData.get('image')?.toString(),
+    content: formData.get('content')?.toString(),
+    excerpt: formData.get('excerpt')?.toString(),
+    author: formData.get('author')?.toString(),
   };
+
+  console.log("Attempting to create post with rawData:", rawData);
 
   try {
     await Post.create(rawData);
+    console.log("Post created successfully.");
   } catch (error: any) {
-    // MongoDB duplicate key error code is 11000
     if (error.code === 11000) {
       return { error: "A post with this URL slug already exists. Please choose a unique slug." };
     }
-    return { error: "An unexpected error occurred while saving the post." };
+    console.error("Error creating post:", error);
+    return { error: `An unexpected error occurred while saving the post: ${error.message || error}` };
   }
   
+  revalidatePath('/blogs');
   revalidatePath('/');
-  redirect('/admin');
+  redirect('/admin/posts');
 }
 
 export async function updatePost(prevState: any, formData: FormData) {
@@ -35,12 +40,13 @@ export async function updatePost(prevState: any, formData: FormData) {
   const id = formData.get('id');
 
   const rawData = {
-    title: formData.get('title'),
-    slug: formData.get('slug'),
-    category: formData.get('category'),
-    image: formData.get('image'),
-    content: formData.get('content'),
-    excerpt: formData.get('excerpt'),
+    title: formData.get('title')?.toString(),
+    slug: formData.get('slug')?.toString(),
+    category: formData.get('category')?.toString(),
+    image: formData.get('image')?.toString(),
+    content: formData.get('content')?.toString(),
+    excerpt: formData.get('excerpt')?.toString(),
+    author: formData.get('author')?.toString(),
   };
 
   try {
@@ -53,6 +59,8 @@ export async function updatePost(prevState: any, formData: FormData) {
     return { error: "An unexpected error occurred while updating the post." };
   }
   
+  revalidatePath('/blogs');
+  revalidatePath('/');
   revalidatePath('/admin/posts');
   redirect('/admin/posts');
 }
@@ -64,6 +72,7 @@ export async function deletePost(formData: FormData) {
   try {
     await Post.findByIdAndDelete(id);
     revalidatePath('/admin/posts');
+    revalidatePath('/blogs');
     revalidatePath('/');
   } catch (error) {
     console.error("Failed to delete post:", error);

@@ -1,7 +1,7 @@
 import "./globals.css";
 import { Providers } from "./providers";
 import AppNavbar from "@/components/Navbar";
-import Footer from "@/components/Footer";
+import ConditionalFooter from "@/components/ConditionalFooter"; // Import the new conditional footer component
 
 export default function RootLayout({
   children,
@@ -14,7 +14,7 @@ export default function RootLayout({
         <Providers>
           <AppNavbar />
           {children}
-          <Footer />
+          <ConditionalFooter /> {/* Use the conditional footer */}
         </Providers>
       </body>
     </html>

@@ -1,7 +1,7 @@
 "use client";
 import { useActionState, useState } from "react";
-import { TextField, Button, Select, MenuItem, Card, CardContent, Divider, Box, Typography, FormControl, InputLabel } from "@mui/material";
-import Grid from "@mui/material/Grid"; // Use Grid2 for modern Material UI grid system
+import { TextField, Button, Select, MenuItem, Card, CardContent, Divider, Box, Typography, FormControl, InputLabel, Alert, Stack } from "@mui/material";
+import Grid from "@mui/material/Grid2"; // Use Grid2 for modern Material UI grid system
 import { Send as SendIcon, Close as CloseIcon, Title as TypeIcon, Link as LinkIcon, Image as ImageIcon, Article as FileTextIcon, Category as CategoryIcon, Info as InfoIcon, Warning as AlertCircleIcon } from "@mui/icons-material";
 import { updatePost } from "@/app/actions/post-actions";
 import { useRouter } from "next/navigation";
@@ -14,6 +14,7 @@ interface PostData {
   image?: string;
   content: string;
   excerpt?: string;
+  author: string; // Added author to PostData interface
 }
 
 export default function PostForm({ postData }: { postData: PostData }) {
@@ -38,10 +39,9 @@ export default function PostForm({ postData }: { postData: PostData }) {
           <form action={formAction} style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
             <input type="hidden" name="id" value={currentPost._id} />
             {state?.error && (
-              <Box sx={{ p: 2, bgcolor: 'error.light', border: '1px solid', borderColor: 'error.main', borderRadius: 2, display: 'flex', alignItems: 'center', gap: 1, color: 'error.contrastText' }}>
-                <AlertCircleIcon fontSize="small" />
-                <Typography variant="body2">{state.error}</Typography>
-              </Box>
+              <Alert severity="error" sx={{ mb: 3 }}>
+                {state.error}
+              </Alert>
             )}
 
             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
@@ -70,15 +70,32 @@ export default function PostForm({ postData }: { postData: PostData }) {
                 <Grid size={{ xs: 12, md: 6 }}>
                   <FormControl fullWidth required>
                     <InputLabel id="category-label">Category</InputLabel>
-                    <Select labelId="category-label" name="category" label="Category" value={currentPost.category} onChange={handleChange}>
+                    <Select labelId="category-label" name="category" label="Category" value={currentPost.category} onChange={handleChange} InputProps={{ startAdornment: <CategoryIcon sx={{ mr: 1, color: 'text.secondary' }} /> }}>
                       <MenuItem value="news">News Article</MenuItem>
-                      <MenuItem value="fact">Interesting Fact</MenuItem>
-                      <MenuItem value="information">Informational Guide</MenuItem>
+                      <MenuItem value="facts">Interesting Facts</MenuItem>
+                      <MenuItem value="blog">Blog Post</MenuItem>
                     </Select>
                   </FormControl>
                 </Grid>
+                {/* Added Author field */}
+                <Grid size={{ xs: 12, md: 6 }}>
+                  <TextField label="Author" name="author" fullWidth required value={currentPost.author} onChange={handleChange} InputProps={{ startAdornment: <TypeIcon sx={{ mr: 1, color: 'text.secondary' }} /> }} />
+                </Grid>
+                {/* Image URL field */}
                 <Grid size={{ xs: 12, md: 6 }}>
                   <TextField label="Cover Image URL" name="image" fullWidth value={currentPost.image || ''} onChange={handleChange} InputProps={{ startAdornment: <ImageIcon sx={{ mr: 1, color: 'text.secondary' }} /> }} />
+                  {currentPost.image && (
+                    <Box sx={{ mt: 2, borderRadius: 2, overflow: 'hidden', border: '1px solid', borderColor: 'divider' }}>
+                      <img 
+                        src={currentPost.image} 
+                        alt="Preview" 
+                        style={{ width: '100%', height: '120px', objectFit: 'cover' }}
+                        onError={(e) => {
+                          e.currentTarget.src = "https://via.placeholder.com/400x120?text=Broken+Image+URL";
+                        }}
+                      />
+                    </Box>
+                  )}
                 </Grid>
               </Grid>
             </Box>

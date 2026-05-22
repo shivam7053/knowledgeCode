@@ -18,7 +18,6 @@ import {
   CircularProgress,
   Container,
   Divider,
-  Grid,
   IconButton,
   LinearProgress,
   Paper,
@@ -32,6 +31,7 @@ import {
   Stack,
   useTheme,
 } from "@mui/material";
+import Grid from "@mui/material/Grid";
 import { styled, alpha } from "@mui/material/styles";
 
 // ── Icons (using text/emoji fallbacks so no icon-library dep is needed) ──────
@@ -128,7 +128,9 @@ const GoldChip = styled(Chip)(() => ({
   textTransform: "uppercase",
 }));
 
-const DropZone = styled(Box)<{ isDragging: boolean }>(({ isDragging }) => ({
+const DropZone = styled(Box, {
+  shouldForwardProp: (prop) => prop !== "isDragging",
+})<{ isDragging: boolean }>(({ isDragging }) => ({
   border: `2px dashed ${isDragging ? "#ffb800" : "rgba(255,255,255,0.15)"}`,
   borderRadius: 16,
   padding: "40px 24px",
@@ -345,7 +347,7 @@ export default function ResumeAnalyzerPage() {
       {/* ── Hero ── */}
       <HeroSection>
         <Container maxWidth="lg">
-          <Stack direction="row" alignItems="center" spacing={1.5} sx={{ mb: 2 }}>
+          <Stack direction="row" spacing={1.5} sx={{ alignItems: "center", mb: 2 }}>
             <GoldChip label="🧠 Private Local AI" />
             <GoldChip label="⚡ Transformers Powered" />
           </Stack>
@@ -373,7 +375,7 @@ export default function ResumeAnalyzerPage() {
       <Container maxWidth="lg" sx={{ mt: 5 }}>
         <Grid container spacing={4}>
           {/* ── Left Panel: Input ── */}
-          <Grid item xs={12} md={5}>
+          <Grid size={{ xs: 12, md: 5 }}>
             <DarkCard>
               <CardContent sx={{ p: 3 }}>
                 {/* Mode tabs */}
@@ -488,7 +490,7 @@ export default function ResumeAnalyzerPage() {
           </Grid>
 
           {/* ── Right Panel: Results ── */}
-          <Grid item xs={12} md={7}>
+          <Grid size={{ xs: 12, md: 7 }}>
             {status === "idle" && (
               <Box
                 sx={{
@@ -531,11 +533,11 @@ export default function ResumeAnalyzerPage() {
                 {/* Score header */}
                 <DarkCard>
                   <CardContent sx={{ p: 3 }}>
-                    <Grid container alignItems="center" spacing={3}>
-                      <Grid item>
+                    <Grid container spacing={3} sx={{ alignItems: "center" }}>
+                      <Grid size="auto">
                         <BigScoreRing score={atsResult.ats_score} />
                       </Grid>
-                      <Grid item xs>
+                      <Grid size="grow">
                         <Typography sx={{ color: "#e6edf3", fontWeight: 700, fontSize: 18, mb: 1 }}>
                           ATS Analysis Complete
                         </Typography>
@@ -565,7 +567,7 @@ export default function ResumeAnalyzerPage() {
 
                 {/* Keywords */}
                 <Grid container spacing={2}>
-                  <Grid item xs={12} sm={6}>
+                  <Grid size={{ xs: 12, sm: 6 }}>
                     <DarkCard sx={{ height: "100%" }}>
                       <CardContent sx={{ p: 3 }}>
                         <Typography sx={{ color: "#22c55e", fontWeight: 700, mb: 2, fontSize: 14 }}>
@@ -579,7 +581,7 @@ export default function ResumeAnalyzerPage() {
                       </CardContent>
                     </DarkCard>
                   </Grid>
-                  <Grid item xs={12} sm={6}>
+                  <Grid size={{ xs: 12, sm: 6 }}>
                     <DarkCard sx={{ height: "100%" }}>
                       <CardContent sx={{ p: 3 }}>
                         <Typography sx={{ color: "#ef4444", fontWeight: 700, mb: 2, fontSize: 14 }}>
@@ -602,7 +604,7 @@ export default function ResumeAnalyzerPage() {
                       <Typography sx={{ color: "#ffb800", fontWeight: 700, mb: 2, fontSize: 14 }}>
                         ⚠️ Missing Sections
                       </Typography>
-                      <Stack direction="row" flexWrap="wrap" gap={1}>
+                      <Stack direction="row" gap={1} sx={{ flexWrap: "wrap" }}>
                         {atsResult.missing_sections.map((s) => (
                           <Chip key={s} label={s} size="small" sx={{ background: "rgba(255,184,0,0.1)", color: "#ffb800", border: "1px solid rgba(255,184,0,0.3)", fontSize: 12 }} />
                         ))}
@@ -677,7 +679,7 @@ export default function ResumeAnalyzerPage() {
 
                 <Grid container spacing={2}>
                   {/* Skills */}
-                  <Grid item xs={12} sm={6}>
+                  <Grid size={{ xs: 12, sm: 6 }}>
                     <DarkCard sx={{ height: "100%" }}>
                       <CardContent sx={{ p: 3 }}>
                         <Typography sx={{ color: "#e6edf3", fontWeight: 700, mb: 2, fontSize: 14 }}>
@@ -692,14 +694,14 @@ export default function ResumeAnalyzerPage() {
                     </DarkCard>
                   </Grid>
                   {/* Industries */}
-                  <Grid item xs={12} sm={6}>
+                  <Grid size={{ xs: 12, sm: 6 }}>
                     <DarkCard sx={{ height: "100%" }}>
                       <CardContent sx={{ p: 3 }}>
                         <Typography sx={{ color: "#e6edf3", fontWeight: 700, mb: 2, fontSize: 14 }}>
                           🏢 Industries
                         </Typography>
                         <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
-                          {summaryResult.industries.map((s) => (
+                          {summaryResult.industries?.map((s) => (
                             <Chip key={s} label={s} size="small" sx={{ background: "rgba(255,184,0,0.1)", color: "#ffb800", border: "1px solid rgba(255,184,0,0.3)", fontSize: 12 }} />
                           ))}
                         </Box>
@@ -731,7 +733,7 @@ export default function ResumeAnalyzerPage() {
                       🏆 Key Achievements
                     </Typography>
                     <Stack spacing={1.5}>
-                      {summaryResult.key_achievements.map((a, i) => (
+                      {summaryResult.key_achievements?.map((a, i) => (
                         <Box key={i} sx={{ display: "flex", gap: 1.5, alignItems: "flex-start" }}>
                           <Box sx={{ width: 22, height: 22, borderRadius: "50%", background: "rgba(255,184,0,0.12)", border: "1px solid rgba(255,184,0,0.35)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, mt: 0.1 }}>
                             <Typography sx={{ fontSize: 10, color: "#ffb800" }}>{i + 1}</Typography>

@@ -1,3 +1,5 @@
+//provider
+
 "use client";
 
 import { useMemo, useEffect, useState, createContext, useContext, useCallback } from "react";
@@ -51,7 +53,7 @@ function ChillModeProvider({ children }: { children: React.ReactNode }) {
 }
 
 function MUIThemeProvider({ children }: { children: React.ReactNode }) {
-  const { theme: nextTheme } = useTheme();
+  const { resolvedTheme } = useTheme();
   const { isChillMode } = useChillMode();
   const [mounted, setMounted] = useState(false);
 
@@ -60,23 +62,25 @@ function MUIThemeProvider({ children }: { children: React.ReactNode }) {
     setMounted(true);
   }, []);
 
+  const isDark = resolvedTheme === "dark";
+
   const muiTheme = useMemo(
     () =>
       createTheme({
         palette: {
-          mode: nextTheme === "dark" ? "dark" : "light",
+          mode: isDark ? "dark" : "light",
           primary: {
             main: isChillMode
-              ? (nextTheme === "dark" ? "#ef4444" : "#ef4444")
-              : (nextTheme === "dark" ? "#3b82f6" : "#10b981"),
+              ? "#ef4444"
+              : (isDark ? "#3b82f6" : "#10b981"),
           },
           background: {
             default: isChillMode
-              ? (nextTheme === "dark" ? "#000000" : "#fdfdfd")
-              : (nextTheme === "dark" ? "#020617" : "#fdfdfd"),
+              ? (isDark ? "#000000" : "#fdfdfd")
+              : (isDark ? "#020617" : "#fdfdfd"),
             paper: isChillMode
-              ? (nextTheme === "dark" ? "#000000" : "#ffffff")
-              : (nextTheme === "dark" ? "#0f172a" : "#ffffff"),
+              ? (isDark ? "#000000" : "#ffffff")
+              : (isDark ? "#0f172a" : "#ffffff"),
           },
           error: {
             main: '#ef4444',
@@ -89,7 +93,7 @@ function MUIThemeProvider({ children }: { children: React.ReactNode }) {
           borderRadius: 12,
         },
       }),
-    [nextTheme, isChillMode]
+    [isDark, isChillMode]
   );
 
   if (!mounted) return <>{children}</>;
@@ -104,12 +108,12 @@ function MUIThemeProvider({ children }: { children: React.ReactNode }) {
 
 export function Providers({ children }: { children: React.ReactNode }) {
   return (
-    <AppRouterCacheProvider>
-      <NextThemesProvider attribute="class" defaultTheme="light" disableTransitionOnChange>
+    <NextThemesProvider attribute="class" defaultTheme="light" disableTransitionOnChange>
+      <AppRouterCacheProvider>
         <ChillModeProvider>
           <MUIThemeProvider>{children}</MUIThemeProvider>
         </ChillModeProvider>
-      </NextThemesProvider>   
-    </AppRouterCacheProvider>
+      </AppRouterCacheProvider>
+    </NextThemesProvider>
   );
 }

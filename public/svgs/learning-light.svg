@@ -1,0 +1,58 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 220" width="300" height="220">
+  <defs>
+    <style>
+      .a1{animation:r .6s cubic-bezier(.34,1.56,.64,1) .1s both}
+      .a2{animation:f .4s ease .4s both}
+      .a3{animation:oL .5s cubic-bezier(.34,1.56,.64,1) .5s both;transform-origin:150px 68px}
+      .a4{animation:oR .5s cubic-bezier(.34,1.56,.64,1) .5s both;transform-origin:150px 68px}
+      .l1{animation:f .25s ease .85s both}
+      .l2{animation:f .25s ease .93s both}
+      .l3{animation:f .25s ease 1.01s both}
+      .l4{animation:f .25s ease 1.09s both}
+      .l5{animation:f .25s ease .85s both}
+      .l6{animation:f .25s ease .93s both}
+      .l7{animation:f .25s ease 1.01s both}
+      .l8{animation:f .25s ease 1.09s both}
+      .cd{animation:p .45s cubic-bezier(.34,1.56,.64,1) 1.05s both;transform-origin:195px 50px}
+      .t1{animation:f .45s ease 1.35s both}
+      .t2{animation:f .45s ease 1.5s both}
+      .ln{animation:f .4s ease 1.45s both}
+      .ac{animation:b 1.1s step-end 1.85s infinite}
+      @keyframes f{from{opacity:0}to{opacity:1}}
+      @keyframes r{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+      @keyframes oL{from{transform:scaleX(0)}to{transform:scaleX(1)}}
+      @keyframes oR{from{transform:scaleX(0)}to{transform:scaleX(1)}}
+      @keyframes p{from{opacity:0;transform:scale(0)}to{opacity:1;transform:scale(1)}}
+      @keyframes b{0%,100%{opacity:1}50%{opacity:0}}
+    </style>
+  </defs>
+
+  <!-- Book: centered horizontally at x=150, top at y=18 -->
+  <g class="a1">
+    <!-- Spine: centered at x=150 -->
+    <rect class="a2" x="147" y="18" width="6" height="84" rx="3" fill="#10b981"/>
+    <!-- Left page: right edge at x=147, opens left -->
+    <path class="a3" d="M147 20 Q112 16 74 30 L74 100 Q112 90 147 100 Z" fill="#ecfdf5" stroke="#10b981" stroke-width="1.5"/>
+    <!-- Right page: left edge at x=153, opens right -->
+    <path class="a4" d="M153 20 Q188 16 226 30 L226 100 Q188 90 153 100 Z" fill="#ecfdf5" stroke="#10b981" stroke-width="1.5"/>
+    <!-- Left page lines -->
+    <line class="l1" x1="86"  y1="44" x2="139" y2="42" stroke="#10b981" stroke-width="1.2" stroke-linecap="round" opacity="0.4"/>
+    <line class="l2" x1="84"  y1="57" x2="139" y2="55" stroke="#10b981" stroke-width="1.2" stroke-linecap="round" opacity="0.4"/>
+    <line class="l3" x1="82"  y1="70" x2="139" y2="68" stroke="#10b981" stroke-width="1.2" stroke-linecap="round" opacity="0.4"/>
+    <line class="l4" x1="81"  y1="83" x2="139" y2="82" stroke="#10b981" stroke-width="1.2" stroke-linecap="round" opacity="0.4"/>
+    <!-- Right page lines -->
+    <line class="l5" x1="161" y1="42" x2="214" y2="44" stroke="#10b981" stroke-width="1.2" stroke-linecap="round" opacity="0.4"/>
+    <line class="l6" x1="161" y1="55" x2="216" y2="57" stroke="#10b981" stroke-width="1.2" stroke-linecap="round" opacity="0.4"/>
+    <line class="l7" x1="161" y1="68" x2="217" y2="70" stroke="#10b981" stroke-width="1.2" stroke-linecap="round" opacity="0.4"/>
+    <line class="l8" x1="161" y1="82" x2="218" y2="83" stroke="#10b981" stroke-width="1.2" stroke-linecap="round" opacity="0.4"/>
+    <!-- </> on right page -->
+    <text class="cd" x="195" y="54" font-family="monospace" font-size="22" font-weight="700" fill="#10b981" text-anchor="middle">&lt;/&gt;</text>
+  </g>
+
+  <!-- Divider line -->
+  <line class="ln" x1="80" y1="130" x2="220" y2="130" stroke="#10b981" stroke-width="1.5" stroke-linecap="round" opacity="0.25"/>
+  <!-- Wordmark: centered at x=150 -->
+  <text class="t1" x="150" y="158" font-family="system-ui,-apple-system,sans-serif" font-size="18" font-weight="700" fill="#10b981" text-anchor="middle" letter-spacing="0.4">knowledge</text>
+  <text class="t2" x="150" y="196" font-family="monospace" font-size="26" font-weight="700" fill="#10b981" text-anchor="middle" letter-spacing="3">CODE</text>
+  <text class="ac" x="196" y="196" font-family="monospace" font-size="26" font-weight="700" fill="#10b981">_</text>
+</svg>

@@ -1,7 +1,22 @@
 "use client";
-import { Box, CircularProgress, Typography, Stack } from "@mui/material";
+import { Box, CircularProgress } from "@mui/material";
+import { useTheme } from "next-themes";
+import { useChillMode } from "@/app/providers";
+import { useState, useEffect } from "react";
 
 export default function GlobalLoading() {
+  const { resolvedTheme } = useTheme();
+  const { isChillMode } = useChillMode();
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  const themeSuffix = mounted && resolvedTheme === "dark" ? "dark" : "light";
+  const typePrefix = mounted && isChillMode ? "chill" : "learning";
+  const logoPath = `/logos/${typePrefix}-${themeSuffix}.png`;
+
   return (
     <Box
       sx={{
@@ -17,12 +32,24 @@ export default function GlobalLoading() {
         zIndex: 9999,
       }}
     >
-      <Stack alignItems="center" spacing={2}>
-        <CircularProgress size={60} thickness={4} color="primary" />
-        <Typography variant="h6" sx={{ fontWeight: 600, letterSpacing: 1, color: 'text.secondary' }}>
-          KNOWLEDGER LOLO
-        </Typography>
-      </Stack>
+      <Box sx={{ position: "relative", display: "inline-flex" }}>
+        <CircularProgress size={100} thickness={2} color="primary" />
+        {mounted && (
+          <Box
+            component="img"
+            src={logoPath}
+            alt="Loading..."
+            sx={{
+              position: "absolute",
+              top: "50%",
+              left: "50%",
+              transform: "translate(-50%, -50%)",
+              height: 40,
+              width: "auto",
+            }}
+          />
+        )}
+      </Box>
     </Box>
   );
 }

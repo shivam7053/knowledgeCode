@@ -2,7 +2,8 @@
 import React from "react";
 import { Box, Container, Grid, Typography, Link as MuiLink, Stack, IconButton, Divider, alpha, useTheme } from "@mui/material";
 import Link from "next/link";
-import { GitHub, Twitter, LinkedIn, Instagram, School, SportsEsports } from "@mui/icons-material";
+import { GitHub, Twitter, LinkedIn, Instagram } from "@mui/icons-material";
+import ThemeLogo from "./ThemeLogo";
 import { useChillMode } from "@/app/providers";
 
 export default function Footer() {
@@ -73,15 +74,12 @@ export default function Footer() {
       <Container maxWidth="xl">
         <Grid container spacing={6}>
           {/* Brand Identity Section */}
-          <Grid item xs={12} md={4}>
+          <Grid size={{ xs: 12, md: 4 }}>
             <Box sx={{ mb: 3 }}>
-              <Typography
-                variant="h6"
+              <Box
                 component={Link}
                 href="/"
                 sx={{
-                  fontWeight: 900,
-                  color: headingColor,
                   textDecoration: "none",
                   display: "flex",
                   alignItems: "center",
@@ -89,19 +87,18 @@ export default function Footer() {
                   mb: 2,
                 }}
               >
-                <Box
+                <ThemeLogo isChillMode={isChillMode} />
+                <Typography
+                  variant="h6"
+                  component="span"
                   sx={{
-                    p: 0.5,
-                    bgcolor: brandColor,
-                    color: "#fff",
-                    borderRadius: 1,
-                    display: "flex",
+                    fontWeight: 900,
+                    color: headingColor,
                   }}
                 >
-                  {isChillMode ? <SportsEsports /> : <School />}
-                </Box>
-                KnowledgeCode
-              </Typography>
+                  {isChillMode ? "GameCode" : "KnowledgeCode"}
+                </Typography>
+              </Box>
               <Typography variant="body2" sx={{ lineHeight: 1.8, maxWidth: 320 }}>
                 Empowering your journey through specialized learning paths, high-performance document tools, and immersive arcade experiences.
               </Typography>
@@ -125,7 +122,7 @@ export default function Footer() {
 
           {/* Dynamic Link Sections */}
           {sections.map((section) => (
-            <Grid item xs={6} sm={4} md={2.5} key={section.title}>
+            <Grid size={{ xs: 6, sm: 4, md: 2.5 }} key={section.title}>
               <Typography
                 variant="subtitle2"
                 sx={{
@@ -164,8 +161,10 @@ export default function Footer() {
 
         <Stack
           direction={{ xs: "column", sm: "row" }}
-          justifyContent="space-between"
-          alignItems="center"
+          sx={{
+            justifyContent: "space-between",
+            alignItems: "center",
+          }}
           spacing={2}
         >
           <Typography variant="caption">

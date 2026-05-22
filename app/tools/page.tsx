@@ -7,9 +7,6 @@
  *   • Summarization, Sentiment, Q&A are processed server-side using HuggingFace Transformers.
  *   Models are pre-downloaded into the Docker container for offline use.
  *
- * Models are downloaded once from HuggingFace Hub and cached in browser (IndexedDB).
- * Zero server required for AI features. All processing is 100% private & local.
- *
  * PDF / Office tools use pdf-lib, mammoth.js, SheetJS (also browser-native).
  * Server-side tools (compress, pdf-to-image, pdf-to-word via Ghostscript, pdf-to-excel via pdfplumber)
  * call the FastAPI backend at PYTHON_API_BASE (localhost:8000 by default).
@@ -22,8 +19,7 @@ import {
   Paper, Stack, useTheme, alpha, TextField, FormControl, InputLabel,
   Select, MenuItem, Tooltip, Badge, CircularProgress,
 } from "@mui/material";
-import Grid from "@mui/material/Grid";
-import UploadFileIcon from "@mui/icons-material/UploadFile";
+import Grid from "@mui/material/Grid"; // Use Grid2 for modern Material UI grid system
 import PictureAsPdfIcon from "@mui/icons-material/PictureAsPdf";
 import DescriptionIcon from "@mui/icons-material/Description";
 import MergeIcon from "@mui/icons-material/Merge";
@@ -44,6 +40,7 @@ import AutoAwesomeIcon from "@mui/icons-material/AutoAwesome";
 import SentimentSatisfiedAltIcon from "@mui/icons-material/SentimentSatisfiedAlt";
 import QuestionAnswerIcon from "@mui/icons-material/QuestionAnswer";
 import MemoryIcon from "@mui/icons-material/Memory";
+import UploadFileIcon from "@mui/icons-material/UploadFile";
 import CloudDownloadIcon from "@mui/icons-material/CloudDownload";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import DeleteIcon from "@mui/icons-material/Delete";
@@ -168,6 +165,10 @@ async function runAISummarize(
   const formData = new FormData();
   formData.append("text", text);
   const resp = await fetch(`${PYTHON_API_BASE}/ai/summarize`, { method: "POST", body: formData });
+  if (!resp.ok) {
+    const err = await resp.json().catch(() => ({}));
+    throw new Error(err.detail || err.error || `Summarization failed (${resp.status})`);
+  }
   const data = await resp.json();
   return data.result;
 }
@@ -182,6 +183,10 @@ async function runAIQA(
   formData.append("context", context);
   formData.append("question", question);
   const resp = await fetch(`${PYTHON_API_BASE}/ai/qa`, { method: "POST", body: formData });
+  if (!resp.ok) {
+    const err = await resp.json().catch(() => ({}));
+    throw new Error(err.detail || err.error || `Q&A failed (${resp.status})`);
+  }
   const data = await resp.json();
   return data.result;
 }
@@ -249,18 +254,6 @@ async function processTool(
       const blob = await serverOp("compress-pdf", { compressionLevel: params.compressionLevel || "medium" });
       return { blob, name: `compressed-${file.name}` };
     }
-    case "pdf-to-image": {
-      const blob = await serverOp("pdf-to-image");
-      return { blob, name: file.name.replace(/\.pdf$/i, ".png") };
-    }
-    case "pdf-to-excel": {
-      const blob = await serverOp("pdf-to-excel");
-      return { blob, name: file.name.replace(/\.pdf$/i, ".xlsx") };
-    }
-    case "pdf-to-word": {
-      const blob = await serverOp("pdf-to-word");
-      return { blob, name: file.name.replace(/\.pdf$/i, ".docx") };
-    }
     case "encrypt-pdf": {
       if (!params.password) throw new Error("Please enter a password.");
       const blob = await serverOp("protect-pdf", { password: params.password });
@@ -273,6 +266,10 @@ async function processTool(
     case "extract-text": {
       const blob = await serverOp("extract-text");
       return { blob, name: file.name.replace(/\.pdf$/i, ".txt") };
+    }
+    case "pdf-to-image": {
+      const blob = await serverOp("pdf-to-image");
+      return { blob, name: file.name.replace(/\.pdf$/i, ".png") };
     }
 
     case "merge-pdf": {
@@ -481,7 +478,16 @@ function DropZone({ tool, onFiles }: { tool: Tool; onFiles: (files: File[]) => v
       </Typography>
       {tool.category === "ai" && (
         <Box mt={2} p={1.5} sx={{ background: alpha(theme.palette.success.main, 0.08), borderRadius: 2, border: `1px solid ${alpha(theme.palette.success.main, 0.2)}` }}>
-          <Typography variant="caption" color="success.main" display="flex" alignItems="center" gap={0.5} justifyContent="center">
+          <Typography 
+            variant="caption" 
+            color="success.main" 
+            sx={{ 
+              display: 'flex', 
+              alignItems: 'center', 
+              gap: 0.5, 
+              justifyContent: 'center' 
+            }}
+          >
             <MemoryIcon sx={{ fontSize: 14 }} />
             100% local AI — model runs in your browser after first download
           </Typography>
@@ -494,15 +500,15 @@ function DropZone({ tool, onFiles }: { tool: Tool; onFiles: (files: File[]) => v
 // ─── Model Info Banner ────────────────────────────────────────────────────────
 function AIModelBanner({ toolId }: { toolId: ToolId }) {
   const theme = useTheme();
-  const info: Record<string, { model: string; source: string; task: string }> = { // Removed size as it's not relevant for backend
-    "ai-summarize": { model: "sshleifer/distilbart-cnn-6-6", source: "HuggingFace", task: "Abstractive Summarization" }, // Removed ai-sentiment
-    "ai-qa": { model: "distilbert-base-uncased-distilled-squad", source: "HuggingFace/Stanford", task: "Question Answering" },
+  const info: Record<string, { model: string; source: string; task: string; size: string }> = {
+    "ai-summarize": { model: "sshleifer/distilbart-cnn-6-6", source: "HuggingFace", task: "Abstractive Summarization", size: "1.2 GB" },
+    "ai-qa": { model: "distilbert-base-uncased-distilled-squad", source: "HuggingFace/Stanford", task: "Question Answering", size: "265 MB" },
   };
   const m = info[toolId];
   if (!m) return null;
   return (
     <Box p={2} sx={{ background: alpha(theme.palette.info.main, 0.07), borderRadius: 2, border: `1px solid ${alpha(theme.palette.info.main, 0.2)}`, mb: 2 }}>
-      <Stack direction="row" alignItems="center" gap={1} flexWrap="wrap">
+      <Stack direction="row" sx={{ alignItems: 'center', gap: 1, flexWrap: 'wrap' }}> {/* flexWrap and alignItems moved to sx */}
         <MemoryIcon sx={{ fontSize: 16, color: "info.main" }} />
         <Typography variant="caption" fontWeight={700} color="info.main">{m.task} (Model: {m.model})</Typography>
         <Chip label={m.source} size="small" sx={{ fontSize: 10, height: 18 }} />
@@ -576,14 +582,14 @@ function ToolPanel({ tool, onClose }: { tool: Tool; onClose: () => void }) {
       backdropFilter: "blur(10px)",
     }}>
       {/* Header */}
-      <Stack direction="row" alignItems="center" justifyContent="space-between" mb={3}>
-        <Stack direction="row" alignItems="center" gap={2}>
+      <Stack direction="row" sx={{ alignItems: "center", justifyContent: "space-between", mb: 3 }}> {/* alignItems and justifyContent moved to sx */}
+        <Stack direction="row" sx={{ alignItems: "center", gap: 2 }}> {/* alignItems moved to sx */}
           <Box sx={{ width: 40, height: 40, borderRadius: 2, display: "flex", alignItems: "center", justifyContent: "center", background: alpha(primary, 0.12), color: primary }}>
             {tool.icon}
           </Box>
           <Box>
-            <Stack direction="row" alignItems="center" gap={1}>
-              <Typography variant="h6" fontWeight={700} lineHeight={1.1}>{tool.label}</Typography>
+            <Stack direction="row" sx={{ alignItems: "center", gap: 1 }}> {/* alignItems moved to sx */}
+              <Typography variant="h6" sx={{ fontWeight: 700, lineHeight: 1.1 }}>{tool.label}</Typography> {/* lineHeight moved to sx */}
               {tool.badge && (
                 <Chip label={tool.badge} size="small" sx={{ fontSize: 10, height: 18, fontWeight: 700, background: alpha(tool.badgeColor || primary, 0.15), color: tool.badgeColor || primary }} />
               )}
@@ -606,7 +612,7 @@ function ToolPanel({ tool, onClose }: { tool: Tool; onClose: () => void }) {
           <Typography variant="subtitle2" fontWeight={700} mb={2}>Options</Typography>
           <Grid container spacing={2}>
             {tool.id === "compress-pdf" && (
-              <Grid item xs={12}>
+              <Grid size={{ xs: 12 }}>
                 <FormControl fullWidth size="small">
                   <InputLabel>Compression Level</InputLabel>
                   <Select label="Compression Level" value={params.compressionLevel}
@@ -619,7 +625,7 @@ function ToolPanel({ tool, onClose }: { tool: Tool; onClose: () => void }) {
               </Grid>
             )}
             {tool.id === "watermark-pdf" && (
-              <Grid item xs={12} sm={8}>
+              <Grid size={{ xs: 12, sm: 8 }}>
                 <TextField fullWidth size="small" label="Watermark Text"
                   value={params.watermarkText}
                   onChange={(e) => setParams((p) => ({ ...p, watermarkText: e.target.value }))}
@@ -627,7 +633,7 @@ function ToolPanel({ tool, onClose }: { tool: Tool; onClose: () => void }) {
               </Grid>
             )}
             {tool.id === "watermark-pdf" && (
-              <Grid item xs={12} sm={4}>
+              <Grid size={{ xs: 12, sm: 4 }}>
                 <FormControl fullWidth size="small">
                   <InputLabel>Opacity</InputLabel>
                   <Select label="Opacity" value={params.opacity}
@@ -640,7 +646,7 @@ function ToolPanel({ tool, onClose }: { tool: Tool; onClose: () => void }) {
               </Grid>
             )}
             {tool.id === "split-pdf" && (
-              <Grid item xs={12}>
+              <Grid size={{ xs: 12 }}>
                 <TextField fullWidth size="small" label="Page Range (e.g. 1-3, 5, 7-9)"
                   value={params.range}
                   onChange={(e) => setParams((p) => ({ ...p, range: e.target.value }))}
@@ -648,7 +654,7 @@ function ToolPanel({ tool, onClose }: { tool: Tool; onClose: () => void }) {
               </Grid>
             )}
             {tool.id === "rotate-pdf" && (
-              <Grid item xs={12}>
+              <Grid size={{ xs: 12 }}>
                 <FormControl fullWidth size="small">
                   <InputLabel>Rotation Angle</InputLabel>
                   <Select label="Rotation Angle" value={params.angle}
@@ -661,7 +667,7 @@ function ToolPanel({ tool, onClose }: { tool: Tool; onClose: () => void }) {
               </Grid>
             )}
             {tool.id === "page-numbers" && (
-              <Grid item xs={12}>
+              <Grid size={{ xs: 12 }}>
                 <FormControl fullWidth size="small">
                   <InputLabel>Number Position</InputLabel>
                   <Select label="Number Position" value={params.numberPosition}
@@ -675,14 +681,14 @@ function ToolPanel({ tool, onClose }: { tool: Tool; onClose: () => void }) {
               </Grid>
             )}
             {(tool.id === "encrypt-pdf" || tool.id === "decrypt-pdf") && (
-              <Grid item xs={12}>
+              <Grid size={{ xs: 12 }}>
                 <TextField fullWidth size="small" type="password" label="Password"
                   value={params.password}
                   onChange={(e) => setParams((p) => ({ ...p, password: e.target.value }))} />
               </Grid>
             )}
             {tool.id === "ai-qa" && (
-              <Grid item xs={12}>
+              <Grid size={{ xs: 12 }}>
                 <TextField fullWidth size="small" label="Your Question"
                   value={params.question}
                   onChange={(e) => setParams((p) => ({ ...p, question: e.target.value }))}
@@ -717,12 +723,16 @@ function ToolPanel({ tool, onClose }: { tool: Tool; onClose: () => void }) {
       {/* Progress */}
       {state.processing && (
         <Box mt={2}>
-          <Stack direction="row" alignItems="center" gap={1} mb={0.5}>
+          <Stack direction="row" sx={{ alignItems: 'center', gap: 1, mb: 0.5 }}> {/* alignItems moved to sx */}
             <CircularProgress size={14} />
             <Typography variant="caption" color="text.secondary">{state.progressMsg}</Typography>
           </Stack>
           <LinearProgress variant="determinate" value={state.progress} sx={{ borderRadius: 4, height: 6 }} />
-          <Typography variant="caption" color="text.secondary" mt={0.5} display="block" textAlign="right">
+          <Typography 
+            variant="caption" 
+            color="text.secondary" 
+            sx={{ mt: 0.5, display: 'block', textAlign: 'right' }}
+          >
             {state.progress}%
           </Typography>
         </Box>
@@ -734,7 +744,7 @@ function ToolPanel({ tool, onClose }: { tool: Tool; onClose: () => void }) {
       {/* AI Result */}
       {state.done && state.aiOutput && (
         <Box mt={2} p={3} sx={{ borderRadius: 3, background: alpha(primary, 0.05), border: `1px solid ${alpha(primary, 0.15)}` }}>
-          <Stack direction="row" alignItems="center" gap={1} mb={2}>
+          <Stack direction="row" sx={{ alignItems: 'center', gap: 1, mb: 2 }}> {/* alignItems moved to sx */}
             <CheckCircleIcon sx={{ color: "success.main", fontSize: 20 }} />
             <Typography variant="subtitle2" fontWeight={700}>Result</Typography>
             <Box flex={1} />
@@ -806,7 +816,7 @@ function ToolCard({ tool, active, onClick }: { tool: Tool; active: boolean; onCl
     }}>
       <CardActionArea onClick={onClick} sx={{ p: 0 }}>
         <CardContent sx={{ p: 2.5 }}>
-          <Stack direction="row" justifyContent="space-between" alignItems="flex-start" mb={1.5}>
+          <Stack direction="row" sx={{ justifyContent: "space-between", alignItems: "flex-start", mb: 1.5 }}> {/* justifyContent and alignItems moved to sx */}
             <Box className="tool-icon-box" sx={{
               width: 44, height: 44, borderRadius: 2,
               display: "flex", alignItems: "center", justifyContent: "center",
@@ -857,14 +867,14 @@ export default function DocumentToolsPage() {
         pt: { xs: 6, md: 10 }, pb: { xs: 5, md: 8 },
       }}>
         <Container maxWidth="lg">
-          <Stack alignItems="center" textAlign="center">
+          <Stack sx={{ alignItems: "center", textAlign: "center" }}> {/* alignItems and textAlign moved to sx */}
             <Chip label="Office Document Suite" size="small" sx={{ mb: 2, fontWeight: 700, fontSize: 11, background: alpha(primary, 0.12), color: primary, border: `1px solid ${alpha(primary, 0.25)}` }} />
             <Typography variant="h2" fontWeight={800} sx={{
               fontSize: { xs: "2.5rem", md: "4rem" }, letterSpacing: "-0.04em",
               background: isChillMode
                 ? `linear-gradient(135deg, #ef4444, ${isDark ? "#fff" : "#000"})`
                 : `linear-gradient(135deg, ${primary}, ${theme.palette.text.primary})`,
-              backgroundClip: "text", WebkitBackgroundClip: "text", color: "transparent", mb: 1,
+              backgroundClip: "text", WebkitBackgroundClip: "text", color: "transparent", mb: 1, // These are valid CSS properties, not React props
             }}>
               Document Tools
             </Typography>
@@ -875,14 +885,14 @@ export default function DocumentToolsPage() {
               </Box>
             </Typography>
 
-            <Stack direction="row" gap={4} mt={5} flexWrap="wrap" justifyContent="center">
+            <Stack direction="row" sx={{ gap: 4, mt: 5, flexWrap: "wrap", justifyContent: "center" }}> {/* flexWrap and justifyContent moved to sx */}
               {[
                 { label: "Tools", value: TOOLS.length },
                 { label: "AI Models", value: "4 Local" },
                 { label: "Languages", value: "200+" },
                 { label: "Uploads to server", value: "0" },
               ].map((s) => (
-                <Box key={s.label} textAlign="center">
+                <Box key={s.label} sx={{ textAlign: "center" }}>
                   <Typography variant="h4" fontWeight={800} color="primary">{s.value}</Typography>
                   <Typography variant="caption" color="text.secondary" fontWeight={500}>{s.label}</Typography>
                 </Box>
@@ -905,7 +915,7 @@ export default function DocumentToolsPage() {
           const catTools = TOOLS.filter((t) => t.category === cat);
           return (
             <Box key={cat} mb={8}>
-              <Stack direction="row" alignItems="center" gap={2} mb={4}>
+              <Stack direction="row" sx={{ alignItems: "center", gap: 2, mb: 4 }}> {/* alignItems moved to sx */}
                 <Box sx={{ p: 1, borderRadius: 1.5, bgcolor: alpha(primary, 0.1), color: primary, display: "flex", alignItems: "center", justifyContent: "center" }}>
                   {cat === "ai" ? <MemoryIcon sx={{ fontSize: 20 }} /> : <DescriptionIcon sx={{ fontSize: 20 }} />}
                 </Box>
@@ -930,7 +940,7 @@ export default function DocumentToolsPage() {
 
               <Grid container spacing={2.5} columns={12}>
                 {catTools.map((tool) => (
-                  <Grid item xs={12} sm={6} md={4} lg={3} key={tool.id}>
+                  <Grid size={{ xs: 12, sm: 6, md: 4, lg: 3 }} key={tool.id}>
                     <ToolCard tool={tool} active={activeTool === tool.id} onClick={() => handleToolClick(tool)} />
                   </Grid>
                 ))}
@@ -942,8 +952,8 @@ export default function DocumentToolsPage() {
         <Paper elevation={0} sx={{ mt: 2, p: 3, borderRadius: 3, background: alpha(primary, 0.05), border: `1px solid ${alpha(primary, 0.12)}`, textAlign: "center" }}>
           <Typography variant="body2" color="text.secondary">
             PDF/Office tools: <strong>pdf-lib</strong>, <strong>mammoth.js</strong>, <strong>SheetJS</strong> (browser-native) · AI tools: <strong>HuggingFace Transformers</strong> running{" "}
-            <strong>DistilBART-CNN</strong>, <strong>DistilBERT-SQuAD/SST-2</strong> on your local server.
-            Files never leave your device.
+            <strong>DistilBART-CNN</strong>, <strong>DistilBERT-SQuAD</strong> on your local server.
+            Processed 100% locally.
           </Typography>
         </Paper>
       </Container>

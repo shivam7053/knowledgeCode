@@ -7,7 +7,7 @@ const PostSchema = new Schema(
     content: { type: String, required: true },
     category: { 
       type: String, 
-      enum: ["news", "fact", "information"], 
+      enum: ["news", "facts", "blog"], 
       required: true 
     },
     image: { type: String },
