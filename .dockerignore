@@ -1,0 +1,12 @@
+**/node_modules
+**/.next
+**/__pycache__
+**/.venv
+**/env
+**/.git
+**/.dockerignore
+**/Dockerfile
+**/dockerfile
+**/docker-compose*
+api/model_cache
+api/sandbox_temp

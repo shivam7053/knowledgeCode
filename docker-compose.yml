@@ -1,0 +1,80 @@
+services:
+  redis:
+    image: redis:alpine
+    ports:
+      - "6379:6379"
+    restart: always
+
+  db:
+    image: mongo:latest
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+
+  api:
+    build: ./api
+    ports:
+      - "8000:8000"
+    environment:
+      - MONGODB_URI=mongodb://db:27017
+      - MONGODB_DB_NAME=knowledgecode_db
+      - SANDBOX_VOLUME_NAME=knowledgecode_sandbox_temp
+      - REDIS_URL=redis://redis:6379
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - sandbox_temp:/sandbox
+    depends_on:
+      - db
+      - redis
+      - python_exec_builder
+      - node_exec_builder
+      - java_exec_builder
+      - cpp_exec_builder
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:8000
+      - MONGODB_URI=mongodb://db:27017/knowledgecode_db
+      - MONGODB_DB_NAME=knowledgecode_db
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+      - /app/.next
+    command: sh -c "npm install && npm run dev"
+    depends_on:
+      - api
+      - db
+
+  # Builder services to create the execution images for the sandbox
+  python_exec_builder:
+    build:
+      context: ./api/exec_python
+      dockerfile: Dockerfile
+    image: knowledgecode-python-exec
+
+  node_exec_builder:
+    build:
+      context: ./api/exec_node
+      dockerfile: Dockerfile
+    image: knowledgecode-node-exec
+
+  java_exec_builder:
+    build:
+      context: ./api/exec_java
+      dockerfile: Dockerfile
+    image: knowledgecode-java-exec
+
+  cpp_exec_builder:
+    build:
+      context: ./api/exec_cpp
+      dockerfile: Dockerfile
+    image: knowledgecode-cpp-exec
+
+volumes:
+  mongo_data:
+  sandbox_temp:
+    name: knowledgecode_sandbox_temp
