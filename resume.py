@@ -11,7 +11,9 @@ from io import BytesIO
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from fastapi.responses import JSONResponse
 from sentence_transformers import SentenceTransformer, util
-from tools import get_pipe, MODEL_CACHE, redis_client
+import torch
+from transformers import AutoTokenizer, AutoModelForSeq2SeqLM, AutoModelForQuestionAnswering
+from tools import get_model_pkg, MODEL_CACHE, redis_client
 import numpy as np
 
 # PDF extraction
@@ -192,19 +194,34 @@ async def summarize_resume(
     # 1. High-quality local BART summary
     local_summary = "Could not generate summary."
     try:
-        summarizer = get_pipe("summarization_bart", "summarization", "sshleifer/distilbart-cnn-6-6")
-        local_summary = summarizer(resume_text[:4000], max_length=150, min_length=50, do_sample=False)[0]['summary_text']
-    except Exception:
+        model_sum, tokenizer_sum, device_sum = get_model_pkg("sum", AutoModelForSeq2SeqLM, "sshleifer/distilbart-cnn-6-6")
+        inputs = tokenizer_sum(resume_text[:4000], return_tensors="pt", truncation=True, max_length=1024).to(device_sum)
+        with torch.no_grad():
+            summary_ids = model_sum.generate(inputs["input_ids"], max_length=150, min_length=50, do_sample=False)
+        local_summary = tokenizer_sum.decode(summary_ids[0], skip_special_tokens=True)
+    except Exception as e:
+        print(f"Summarization error: {e}")
         pass
 
     # 2. Structured Extraction via local QA model
-    qa_pipe = get_pipe("qa_distilbert", "question-answering", "distilbert-base-uncased-distilled-squad")
-    
+    model_qa, tokenizer_qa, device_qa = get_model_pkg("qa", AutoModelForQuestionAnswering, "distilbert-base-uncased-distilled-squad")
+
     def ask(q):
         try:
-            res = qa_pipe(question=q, context=resume_text[:2000])
-            return res['answer'] if res['score'] > 0.1 else "Not found"
-        except: return "Not found"
+            inputs = tokenizer_qa(q, resume_text[:2000], return_tensors="pt", truncation=True, max_length=512).to(device_qa)
+            with torch.no_grad():
+                outputs = model_qa(**inputs)
+            
+            answer_start = torch.argmax(outputs.start_logits)
+            answer_end = torch.argmax(outputs.end_logits) + 1
+            
+            answer = tokenizer_qa.convert_tokens_to_string(
+                tokenizer_qa.convert_ids_to_tokens(inputs["input_ids"][0][answer_start:answer_end])
+            )
+            return answer if answer.strip() and answer.strip() != "[CLS]" else "Not found"
+        except Exception as e:
+            print(f"QA error for question '{q}': {e}")
+            return "Not found"
 
     result = {
         "candidate_name": ask("What is the full name of the candidate?"),
@@ -212,6 +229,8 @@ async def summarize_resume(
         "years_of_experience": ask("How many years of experience does the candidate have?"),
         "top_skills": list(extract_keywords(resume_text))[:10],
         "education": [ask("Where did the candidate study?")],
+        "key_achievements": [ask("What is a major professional achievement mentioned?")],
+        "industries": [ask("What industries is this candidate experienced in?")],
         "summary_paragraph": local_summary
     }
 

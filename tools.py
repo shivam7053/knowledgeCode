@@ -5,9 +5,10 @@ import tempfile
 import threading
 import hashlib
 from pathlib import Path
+import torch
 from fastapi import APIRouter, Form, HTTPException, UploadFile, File, BackgroundTasks
 from fastapi.responses import FileResponse
-from transformers import pipeline
+from transformers import AutoTokenizer, AutoModelForSeq2SeqLM, AutoModelForQuestionAnswering
 import pandas as pd
 import pdfplumber
 import redis
@@ -76,25 +77,23 @@ except Exception as e:
 _pipelines = {}
 _load_lock = threading.Lock()
 
-def get_pipe(cache_key: str, pipeline_task_name: str, model_name: str, model_kwargs: dict = None):
-    """Lazy-loads and caches models from the local filesystem."""
+def get_model_pkg(cache_key: str, model_class, model_name: str):
+    """Lazy-loads and caches model and tokenizer to bypass broken pipeline registries."""
     if cache_key not in _pipelines:
         with _load_lock:
             if cache_key not in _pipelines:
                 try:
-                    kwargs = {"cache_dir": MODEL_CACHE}
-                    if model_kwargs:
-                        kwargs.update(model_kwargs)
-                    _pipelines[cache_key] = pipeline(
-                        pipeline_task_name,
-                        model=model_name, 
-                        model_kwargs=kwargs
-                    )
+                    tokenizer = AutoTokenizer.from_pretrained(model_name, cache_dir=MODEL_CACHE)
+                    model = model_class.from_pretrained(model_name, cache_dir=MODEL_CACHE)
+                    
+                    # Move to GPU if available, else CPU
+                    device = "cuda" if torch.cuda.is_available() else "cpu"
+                    model.to(device)
+                    
+                    _pipelines[cache_key] = (model, tokenizer, device)
                 except Exception as e:
                     raise HTTPException(status_code=500, detail=f"Model error: {str(e)}")
     return _pipelines[cache_key]
-
-# ─── AI Tools ─────────────────────────────────────────────────────────────────
 
 @router.post("/ai/summarize")
 def ai_summarize(text: str = Form(...)):
@@ -106,9 +105,13 @@ def ai_summarize(text: str = Form(...)):
         if cached:
             return {"result": cached, "cached": True}
 
-    pipe = get_pipe("summarization_bart", "summarization", "sshleifer/distilbart-cnn-6-6")
-    res = pipe(text, max_length=150, min_length=40, do_sample=False)
-    summary = res[0]['summary_text']
+    model, tokenizer, device = get_model_pkg("sum", AutoModelForSeq2SeqLM, "sshleifer/distilbart-cnn-6-6")
+    
+    inputs = tokenizer(text, return_tensors="pt", truncation=True, max_length=1024).to(device)
+    with torch.no_grad():
+        summary_ids = model.generate(inputs["input_ids"], max_length=150, min_length=40, do_sample=False)
+    
+    summary = tokenizer.decode(summary_ids[0], skip_special_tokens=True)
 
     # 2. Store in Cache (Expires in 24 hours)
     if redis_client:
@@ -126,9 +129,17 @@ def ai_qa(question: str = Form(...), context: str = Form(...)):
         if cached:
             return {"result": cached, "cached": True}
 
-    pipe = get_pipe("qa_distilbert", "question-answering", "distilbert-base-uncased-distilled-squad")
-    res = pipe(question=question, context=context)
-    answer = res['answer']
+    model, tokenizer, device = get_model_pkg("qa", AutoModelForQuestionAnswering, "distilbert-base-uncased-distilled-squad")
+    
+    inputs = tokenizer(question, context, return_tensors="pt", truncation=True, max_length=512).to(device)
+    with torch.no_grad():
+        outputs = model(**inputs)
+    
+    # Find the tokens with the highest `start` and `end` scores
+    answer_start = torch.argmax(outputs.start_logits)
+    answer_end = torch.argmax(outputs.end_logits) + 1
+    
+    answer = tokenizer.convert_tokens_to_string(tokenizer.convert_ids_to_tokens(inputs["input_ids"][0][answer_start:answer_end]))
 
     # 2. Store in Cache
     if redis_client:
