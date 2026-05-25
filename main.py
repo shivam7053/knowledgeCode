@@ -5,9 +5,14 @@ import practice
 import notifications
 import tools
 import resume
+import Tests as tests
+from bson import ObjectId
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # Initialise Test Portal DB + seed data
+    await tests.startup()
+
     # Startup: Print registered routes
     print("\n=== Registered routes ===")
     for route in app.routes:
@@ -20,6 +25,10 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="KnowledgeCode Tools API", lifespan=lifespan)
+
+# Global encoder to handle MongoDB ObjectIds automatically
+from fastapi.encoders import jsonable_encoder
+app.json_encoders = {ObjectId: str}
 
 app.add_middleware(
     CORSMiddleware,
@@ -37,12 +46,9 @@ app.include_router(tools.router)
 app.include_router(notifications.router)
 # Include Resume Router
 app.include_router(resume.router)
-
+# Include Test Portal Router
+app.include_router(tests.router, prefix="/tests", tags=["Tests"])
 
 @app.get("/")
 async def root():
     return {"status": "ok"}
-
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)

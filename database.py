@@ -48,3 +48,7 @@ db = client.get_database(MONGODB_DB_NAME)
 problems_collection = db.practice_problems
 categories_collection = db.categories
 notifications_collection = db.notifications
+subjects_collection = db.test_subjects
+tests_collection = db.test_metadata
+questions_collection = db.test_questions
+attempts_collection = db.test_attempts
