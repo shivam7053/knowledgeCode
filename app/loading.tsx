@@ -13,8 +13,8 @@ export default function GlobalLoading() {
     setMounted(true);
   }, []);
 
-  const themeSuffix = mounted && resolvedTheme === "dark" ? "dark" : "light";
-  const typePrefix = mounted && isChillMode ? "chill" : "learning";
+  const themeSuffix = (mounted && resolvedTheme === "dark") ? "dark" : "light";
+  const typePrefix = (mounted && isChillMode) ? "chill" : "learning";
   const logoPath = `/logos/${typePrefix}-${themeSuffix}.png`;
 
   return (

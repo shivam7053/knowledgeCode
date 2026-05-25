@@ -4,7 +4,6 @@ import {
   Switch, FormControlLabel, Stack, IconButton, Badge
 } from "@mui/material";
 import Link from "next/link";
-import { ThemeSwitcher } from "./ThemeSwitcher";
 import { useState, useEffect } from "react";
 import { useTheme } from "next-themes";
 import {
@@ -15,13 +14,29 @@ import {
 import { useRouter } from "next/navigation";
 import { useChillMode } from "@/app/providers";
 import ThemeLogo from "./ThemeLogo";
-import ModeTransitionOverlay from "./ModeTransitionOverlay";
+import dynamic from "next/dynamic";
+import { BASE } from "@/lib/testsApi";
+
+// Lazy load ThemeSwitcher (named export) and Overlay (default export)
+const ThemeSwitcher = dynamic(() => import("./ThemeSwitcher").then(mod => mod.ThemeSwitcher), { 
+  ssr: false 
+});
+const ModeTransitionOverlay = dynamic(() => import("./ModeTransitionOverlay"), { 
+  ssr: false 
+});
 
 export default function AppNavbar() {
   const { isChillMode, setIsChillMode } = useChillMode();
   const { resolvedTheme } = useTheme();
-  const isDarkMode = resolvedTheme === "dark";
+  const [mounted, setMounted] = useState(false);
   const router = useRouter();
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  const isDarkMode = mounted && resolvedTheme === "dark";
+  const activeChillMode = mounted && isChillMode;
 
   const [notifCount, setNotifCount] = useState(0);
 
@@ -31,12 +46,14 @@ export default function AppNavbar() {
   useEffect(() => {
     const fetchNotifications = async () => {
       try {
-        const response = await fetch("http://localhost:8000/notifications");
+        const response = await fetch(`${BASE}/notifications`);
         if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
         const data = await response.json();
-        setNotifCount(data.length);
+        if (Array.isArray(data)) {
+          setNotifCount(data.length);
+        }
       } catch (error) {
-        console.error("Error fetching notifications:", error);
+        // Silent fail for notifications to avoid console spam when server is down
         setNotifCount(0);
       }
     };
@@ -52,9 +69,9 @@ export default function AppNavbar() {
       elevation={0}
       sx={{
         borderBottom: 1,
-        borderColor: isChillMode ? "transparent" : "divider",
-        bgcolor: isChillMode ? chillBg : "background.paper",
-        color: isChillMode ? chillText : "text.primary",
+        borderColor: activeChillMode ? "transparent" : "divider",
+        bgcolor: activeChillMode ? chillBg : "background.paper",
+        color: activeChillMode ? chillText : "text.primary",
         transition: "all 0.4s ease-in-out",
       }}
     >
@@ -68,7 +85,7 @@ export default function AppNavbar() {
             href="/"
             sx={{ display: "flex", alignItems: "center", flexGrow: { xs: 1, md: 0 }, mr: 2 }}
           >
-            <ThemeLogo isChillMode={isChillMode} />
+            <ThemeLogo isChillMode={activeChillMode} />
             <Typography
               variant="h6"
               component="span"
@@ -76,10 +93,10 @@ export default function AppNavbar() {
                 fontWeight: 900,
                 ml: 1,
                 display: { xs: 'none', sm: 'block' },
-                color: (isChillMode || isDarkMode) ? "inherit" : "primary.main",
+                color: (activeChillMode || isDarkMode) ? "inherit" : "primary.main",
               }}
             >
-              {isChillMode ? "GameCode" : "KnowledgeCode"}
+              {activeChillMode ? "GameCode" : "KnowledgeCode"}
             </Typography>
           </Box>
 
@@ -90,15 +107,15 @@ export default function AppNavbar() {
               spacing={1}
               sx={{
                 alignItems: "center",
-                bgcolor: isChillMode ? "rgba(255,255,255,0.15)" : "rgba(0,0,0,0.05)",
+                bgcolor: activeChillMode ? "rgba(255,255,255,0.15)" : "rgba(0,0,0,0.05)",
                 px: 2, py: 0.5, borderRadius: 10,
               }}
             >
-              <LearningIcon fontSize="small" sx={{ opacity: isChillMode ? 0.4 : 1 }} />
+              <LearningIcon fontSize="small" sx={{ opacity: activeChillMode ? 0.4 : 1 }} />
               <FormControlLabel
                 control={
                   <Switch
-                    checked={isChillMode}
+                    checked={activeChillMode}
                     onChange={(e) => {
                       const newChillMode = e.target.checked;
                       setIsChillMode(newChillMode);
@@ -107,7 +124,7 @@ export default function AppNavbar() {
                     color="default"
                   />
                 }
-                label={isChillMode ? "Chillout" : "Learning"}
+                label={activeChillMode ? "Chillout" : "Learning"}
                 sx={{
                   m: 0,
                   "& .MuiFormControlLabel-label": {
@@ -115,13 +132,13 @@ export default function AppNavbar() {
                   },
                 }}
               />
-              <ChilloutIcon fontSize="small" sx={{ opacity: isChillMode ? 1 : 0.4 }} />
+              <ChilloutIcon fontSize="small" sx={{ opacity: activeChillMode ? 1 : 0.4 }} />
             </Stack>
           </Box>
 
           {/* Nav Links */}
           <Box sx={{ display: { xs: "none", md: "flex" }, gap: 3, mx: 4 }}>
-            {!isChillMode ? (
+            {!activeChillMode ? (
               <>
                 <MuiLink component={Link} href="/courses" color="inherit" underline="none" sx={{ fontWeight: "medium" }}>Courses</MuiLink>
                 <MuiLink component={Link} href="/compiler" color="inherit" underline="none" sx={{ fontWeight: "medium" }}>Online Compiler</MuiLink>
