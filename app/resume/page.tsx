@@ -8,7 +8,7 @@
  * Backend: FastAPI resume.py running at http://localhost:8000
  */
 
-import React, { useState, useCallback, useRef } from "react";
+import React, { useState, useCallback, useRef, useEffect } from "react";
 import {
   Box,
   Button,
@@ -262,6 +262,10 @@ const BigScoreRing = ({ score }: { score: number }) => {
 
 // ── Main Component ────────────────────────────────────────────────────────────
 export default function ResumeAnalyzerPage() {
+  const theme = useTheme();
+  const primary = theme.palette.primary.main;
+  const isDark = theme.palette.mode === "dark";
+
   const [mode, setMode] = useState<Mode>("ats");
   const [file, setFile] = useState<File | null>(null);
   const [jobDesc, setJobDesc] = useState("");
@@ -271,6 +275,45 @@ export default function ResumeAnalyzerPage() {
   const [atsResult, setAtsResult] = useState<ATSResult | null>(null);
   const [summaryResult, setSummaryResult] = useState<SummaryResult | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [rotation, setRotation] = useState({ x: 0, y: 0 });
+  const heroRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleMouseMove = (event: MouseEvent) => {
+      if (!heroRef.current) return;
+
+      const { clientX, clientY } = event;
+      const { offsetWidth, offsetHeight } = heroRef.current;
+      const { left, top } = heroRef.current.getBoundingClientRect();
+
+      // Calculate center of the hero section
+      const centerX = left + offsetWidth / 2;
+      const centerY = top + offsetHeight / 2;
+
+      // Calculate difference from center
+      const diffX = clientX - centerX;
+      const diffY = clientY - centerY;
+
+      // Normalize to -1 to 1 range and apply sensitivity
+      const sensitivity = 0.05; 
+      const newRotateY = diffX * sensitivity;
+      const newRotateX = -diffY * sensitivity; 
+
+      setRotation({ x: newRotateX, y: newRotateY });
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+    };
+  }, []);
+
+  // Determine cube color based on theme
+  const cubeColor = isDark ? alpha(primary, 0.2) : alpha(primary, 0.1);
+  const cubeGradient = isDark
+    ? `linear-gradient(135deg, ${alpha(theme.palette.primary.dark, 0.8)}, ${alpha(theme.palette.secondary.dark, 0.8)})`
+    : `linear-gradient(135deg, ${alpha(theme.palette.primary.light, 0.8)}, ${alpha(theme.palette.secondary.light, 0.8)})`;
 
   const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
@@ -345,8 +388,41 @@ export default function ResumeAnalyzerPage() {
   return (
     <PageWrapper>
       {/* ── Hero ── */}
-      <HeroSection>
-        <Container maxWidth="lg">
+      <HeroSection ref={heroRef}>
+        {/* Rotating 3D Cube Background */}
+        <Box
+          sx={{
+            position: 'absolute',
+            top: '50%',
+            left: '50%',
+            width: 320,
+            height: 320,
+            transform: `translate(-50%, -50%) rotateX(${rotation.x}deg) rotateY(${rotation.y}deg)`,
+            background: cubeGradient,
+            borderRadius: '24%',
+            boxShadow: `0 0 120px 60px ${cubeColor}`,
+            transition: 'transform 0.1s ease-out',
+            zIndex: 0,
+            perspective: '1000px',
+            transformStyle: 'preserve-3d',
+            pointerEvents: 'none',
+            '&::before, &::after': {
+              content: '""',
+              position: 'absolute',
+              top: 0, left: 0, right: 0, bottom: 0,
+              borderRadius: '24%',
+              background: `linear-gradient(to bottom right, ${alpha(theme.palette.background.paper, 0.1)}, transparent)`,
+              transform: 'translateZ(-60px)',
+              opacity: 0.7,
+            },
+            '&::after': {
+              transform: 'translateZ(60px)',
+              background: `linear-gradient(to top left, ${alpha(theme.palette.background.paper, 0.1)}, transparent)`,
+            }
+          }}
+        />
+
+        <Container maxWidth="lg" sx={{ position: 'relative', zIndex: 1 }}>
           <Stack direction="row" spacing={1.5} sx={{ alignItems: "center", mb: 2 }}>
             <GoldChip label="🧠 Private Local AI" />
             <GoldChip label="⚡ Transformers Powered" />

@@ -11,7 +11,7 @@ import {
   SportsEsports as ChilloutIcon,
   Notifications as NotificationsIcon
 } from "@mui/icons-material";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import { useChillMode } from "@/app/providers";
 import ThemeLogo from "./ThemeLogo";
 import dynamic from "next/dynamic";
@@ -29,6 +29,7 @@ export default function AppNavbar() {
   const { isChillMode, setIsChillMode } = useChillMode();
   const { resolvedTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
+  const pathname = usePathname();
   const router = useRouter();
 
   useEffect(() => {
@@ -83,7 +84,7 @@ export default function AppNavbar() {
           <Box
             component={Link}
             href="/"
-            sx={{ display: "flex", alignItems: "center", flexGrow: { xs: 1, md: 0 }, mr: 2 }}
+            sx={{ display: "flex", alignItems: "center", flexGrow: { xs: 1, md: 0 }, mr: 2, textDecoration: "none" }}
           >
             <ThemeLogo isChillMode={activeChillMode} />
             <Typography
@@ -140,13 +141,13 @@ export default function AppNavbar() {
           <Box sx={{ display: { xs: "none", md: "flex" }, gap: 3, mx: 4 }}>
             {!activeChillMode ? (
               <>
-                <MuiLink component={Link} href="/courses" color="inherit" underline="none" sx={{ fontWeight: "medium" }}>Courses</MuiLink>
-                <MuiLink component={Link} href="/compiler" color="inherit" underline="none" sx={{ fontWeight: "medium" }}>Online Compiler</MuiLink>
-                <MuiLink component={Link} href="/blogs" color="inherit" underline="none" sx={{ fontWeight: "medium" }}>Blog</MuiLink>
-                <MuiLink component={Link} href="/tools" color="inherit" underline="none" sx={{ fontWeight: "medium" }}>Tools</MuiLink>
+                <MuiLink component={Link} href="/courses" color="inherit" underline={pathname === "/courses" ? "always" : "none"} sx={{ fontWeight: "medium" }}>Courses</MuiLink>
+                <MuiLink component={Link} href="/compiler" color="inherit" underline={pathname === "/compiler" ? "always" : "none"} sx={{ fontWeight: "medium" }}>Online Compiler</MuiLink>
+                <MuiLink component={Link} href="/blogs" color="inherit" underline={pathname === "/blogs" ? "always" : "none"} sx={{ fontWeight: "medium" }}>Blog</MuiLink>
+                <MuiLink component={Link} href="/tools" color="inherit" underline={pathname === "/tools" ? "always" : "none"} sx={{ fontWeight: "medium" }}>Tools</MuiLink>
               </>
             ) : (
-              <MuiLink component={Link} href="/game/quiz" color="inherit" underline="none" sx={{ fontWeight: "medium", "&:hover": { color: "white" } }}>
+              <MuiLink component={Link} href="/game/quiz" color="inherit" underline={pathname === "/game/quiz" ? "always" : "none"} sx={{ fontWeight: "medium", "&:hover": { color: "white" } }}>
                 Quiz Arena
               </MuiLink>
             )}
